@@ -9,15 +9,7 @@ export const GET = withAuth(async ({ session, req }, context?: { params?: Promis
   const lead = await getLeadById(id);
   if (!lead) return apiError('Lead not found', 404);
 
-  // Team members can only view leads assigned to them or added by them
-  if (
-    session.role !== 'admin' &&
-    !session.permissions.can_view_all_leads &&
-    lead.assigned_to !== session.id &&
-    lead.added_by !== session.id
-  ) {
-    return apiError('Forbidden', 403);
-  }
+  // All team members can view any lead
 
   return apiSuccess(lead);
 });
@@ -28,13 +20,7 @@ export const PATCH = withAuth(async ({ session, req }, context?: { params?: Prom
   const lead = await getLeadById(id);
   if (!lead) return apiError('Lead not found', 404);
 
-  // Team members can only update their own leads
-  if (
-    session.role !== 'admin' &&
-    lead.assigned_to !== session.id
-  ) {
-    return apiError('Forbidden', 403);
-  }
+  // All team members can update any lead
 
   const body = await req.json();
 

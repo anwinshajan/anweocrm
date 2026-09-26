@@ -81,10 +81,10 @@ export default function NewLeadClient({ categories, sources }: Props) {
           </div>
           <div className="form-group">
             <label className="label" htmlFor="category">Category</label>
-            <select id="category" className="select" value={form.category} onChange={(e) => update('category', e.target.value)}>
-              <option value="">Select category</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <input id="category" list="category-list" className="input" placeholder="e.g. Beauty Salon" value={form.category} onChange={(e) => update('category', e.target.value)} />
+            <datalist id="category-list">
+              {categories.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div className="form-group">
             <label className="label" htmlFor="city">City</label>
@@ -112,10 +112,10 @@ export default function NewLeadClient({ categories, sources }: Props) {
           </div>
           <div className="form-group">
             <label className="label" htmlFor="source">Lead Source</label>
-            <select id="source" className="select" value={form.source} onChange={(e) => update('source', e.target.value)}>
-              <option value="">Select source</option>
-              {sources.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <input id="source" list="source-list" className="input" placeholder="e.g. Google Maps, LinkedIn" value={form.source} onChange={(e) => update('source', e.target.value)} />
+            <datalist id="source-list">
+              {sources.map((s) => <option key={s} value={s} />)}
+            </datalist>
           </div>
           <div className="form-group">
             <label className="label" htmlFor="priority">Priority</label>

@@ -3,16 +3,49 @@
 // All prompts load services/config at runtime — NEVER hardcoded
 // ============================================================
 
-import Anthropic from '@anthropic-ai/sdk';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Bypass local intercept proxy TLS issues
+
+import { GoogleGenAI } from '@google/genai';
 import { getActiveServices, getActivePackages, getBrandKnowledge, getConfigList, getSettings } from './data';
 import type { Lead, Research, AuditResult, Service, Package } from './types';
 
-function getClient(): Anthropic {
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+function getClient(): GoogleGenAI {
+  return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 }
 
 function getModel(): string {
-  return process.env.AI_MODEL ?? 'claude-3-5-haiku-20241022';
+  return process.env.AI_MODEL ?? 'gemini-3.8-flash';
+}
+
+async function callAI(prompt: string, useSearch = false): Promise<string> {
+  if (process.env.GROQ_API_KEY) {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'openai/gpt-oss-120b',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.2
+      })
+    });
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Groq API Error: ${res.status} ${errorText}`);
+    }
+    const data = await res.json();
+    return data.choices[0].message.content || '';
+  }
+
+  const client = getClient();
+  const response = await client.models.generateContent({
+    model: getModel(),
+    contents: prompt,
+    config: useSearch ? { tools: [{ googleSearch: {} }] } : undefined
+  });
+  return response.text || '';
 }
 
 // ─── Context loaders ─────────────────────────────────────────
@@ -104,24 +137,7 @@ Respond ONLY with valid JSON in this exact schema:
   "recommended_service_id": "service id from the list above"
 }`;
 
-  const client = getClient();
-  const response = await client.messages.create({
-    model: getModel(),
-    max_tokens: 2000,
-    messages: [{ role: 'user', content: prompt }],
-    tools: [
-      {
-        name: 'web_search',
-        type: 'computer_use_20250124',
-      },
-    ] as any,
-  });
-
-  // Extract text from response
-  let text = '';
-  for (const block of response.content) {
-    if (block.type === 'text') text += block.text;
-  }
+  let text = await callAI(prompt, true);
 
   // Parse JSON from response
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -185,17 +201,7 @@ Respond ONLY with valid JSON:
   "objection_handlers": [{"objection": "string", "reply": "string"}]
 }`;
 
-  const client = getClient();
-  const response = await client.messages.create({
-    model: getModel(),
-    max_tokens: 1500,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  let text = '';
-  for (const block of response.content) {
-    if (block.type === 'text') text += block.text;
-  }
+  let text = await callAI(prompt, false);
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('AI did not return valid JSON for call note');
@@ -261,17 +267,7 @@ RULES:
 
 Write ONLY the message. No explanation. No subject line. Just the WhatsApp message text.`;
 
-  const client = getClient();
-  const response = await client.messages.create({
-    model: getModel(),
-    max_tokens: 500,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  let message_text = '';
-  for (const block of response.content) {
-    if (block.type === 'text') message_text += block.text;
-  }
+  let message_text = await callAI(prompt, false);
 
   message_text = message_text.trim();
 
@@ -318,17 +314,7 @@ Respond ONLY with valid JSON:
   "suggested_next": "string"
 }`;
 
-  const client = getClient();
-  const response = await client.messages.create({
-    model: getModel(),
-    max_tokens: 400,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  let text = '';
-  for (const block of response.content) {
-    if (block.type === 'text') text += block.text;
-  }
+  let text = await callAI(prompt, false);
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {

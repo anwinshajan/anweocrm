@@ -40,6 +40,8 @@ export interface Lead extends SheetRecord {
   last_contacted_at: string;
   next_followup_at: string;
   closed_at: string;
+  notes: string;
+  has_pitch?: boolean;
 }
 
 export interface Research extends SheetRecord {
@@ -236,4 +238,16 @@ export interface AuditResult {
   check: string;
   status: 'pass' | 'fail' | 'unknown';
   note?: string;
+}
+
+export interface Payment extends SheetRecord {
+  id: string;
+  user_id: string;
+  amount: string; // the monetary value paid
+  type: string; // 'Fixed Salary' | 'Commission' | 'Bonus'
+  method: string; // 'Bank Transfer' | 'Cash' | 'UPI'
+  reference: string; // Transaction ID
+  status: string; // 'Settled' | 'Pending'
+  created_at: string;
+  notes: string;
 }

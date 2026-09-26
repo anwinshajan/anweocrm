@@ -12,14 +12,18 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
+    "@google/genai": "^2.24.0",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
     "googleapis": "^182.0.0",
+    "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.48.0",
     "next": "16.3.6",
     "papaparse": "^5.7.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "recharts": "^3.10.1",
     "uuid": "^14.0.2",
     "xlsx": "^0.18.5",
     "zod": "^4.6.5"
@@ -33,10 +37,12 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "autoprefixer": "^10.6.1",
     "dotenv": "^16.6.1",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
-    "tailwindcss": "^4",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
     "ts-node": "^10.9.2",
     "typescript": "^5"
   }

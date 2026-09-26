@@ -31,9 +31,9 @@ export default async function AdminDashboard() {
     .filter((s) => s.metric === 'messages_sent')
     .reduce((sum, s) => sum + (parseInt(s.value, 10) || 0), 0);
 
-  const leadsThisWeek = stats
-    .filter((s) => s.metric === 'leads_added')
-    .reduce((sum, s) => sum + (parseInt(s.value, 10) || 0), 0);
+  const leadsThisWeek = leads.filter(
+    (l) => l.created_at && l.created_at >= weekAgo
+  ).length;
 
   // Status breakdown
   const statusCounts: Record<string, number> = {};
@@ -51,7 +51,7 @@ export default async function AdminDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/admin/leads" className="btn-secondary btn-sm">All Leads</Link>
+          <Link href="/leads" className="btn-secondary btn-sm">All Leads</Link>
           <Link href="/admin/analytics" className="btn-primary btn-sm">📈 Analytics</Link>
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import type { Lead, ConfigItem } from '@/lib/types';
+import type { Lead, ConfigItem, User } from '@/lib/types';
 
 interface LeadsPageProps {
   initialLeads: Lead[];
@@ -11,6 +11,7 @@ interface LeadsPageProps {
   tags: ConfigItem[];
   role: 'admin' | 'team';
   userId: string;
+  users: User[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -43,6 +44,7 @@ export default function LeadsClient({
   tags,
   role,
   userId,
+  users,
 }: LeadsPageProps) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [total, setTotal] = useState(initialTotal);
@@ -58,6 +60,13 @@ export default function LeadsClient({
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkGenerateProgress, setBulkGenerateProgress] = useState<{current: number, total: number, message: string, currentId: string | null} | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  function showToast(msg: string, type: 'success' | 'error' = 'success') {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }
 
   const PAGE_SIZE = 25;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -121,6 +130,68 @@ export default function LeadsClient({
     fetchLeads(page, search, statusFilter, tagFilter);
   }
 
+  async function bulkGeneratePitches() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBulkGenerateProgress({ current: 0, total: ids.length, message: 'Starting...', currentId: null });
+    
+    let successCount = 0;
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const leadName = leads.find(l => l.id === id)?.business_name || 'Lead';
+      setBulkGenerateProgress({ current: i + 1, total: ids.length, message: `Processing ${leadName}...`, currentId: id });
+      
+      try {
+        const res = await fetch(`/api/leads/${id}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'all', language: 'english', skipIfExists: true }), 
+        });
+        if (res.ok) {
+          successCount++;
+          // Update local state to show it's generated
+          setLeads(prev => prev.map(l => l.id === id ? { ...l, has_pitch: true } : l));
+        }
+      } catch (err) {
+        console.error('Failed to generate for', id, err);
+      }
+      
+      // Wait 15 seconds to respect free tier rate limits (15 RPM), unless it's the last lead
+      if (i < ids.length - 1) {
+        setBulkGenerateProgress({ current: i + 1, total: ids.length, message: `Cooling down for 15s to respect free limits...`, currentId: id });
+        await new Promise(resolve => setTimeout(resolve, 15000));
+      }
+    }
+    
+    setBulkGenerateProgress(null);
+    setSelected(new Set());
+    showToast(`Successfully generated pitches for ${successCount} leads!`);
+  }
+
+  async function openWhatsAppPitch(lead: Lead) {
+    if (!lead.phone && !lead.whatsapp_number) {
+      showToast('No phone number for this lead', 'error');
+      return;
+    }
+    const num = lead.whatsapp_number || lead.phone;
+    
+    // Fetch latest pitch
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/latest-pitch`);
+      const data = await res.json();
+      
+      let text = '';
+      if (data.success && data.data?.message_text) {
+        text = encodeURIComponent(data.data.message_text);
+      } else {
+        showToast('No pitch found for this lead, sending blank message', 'error');
+      }
+      window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${text}`, '_blank');
+    } catch (err) {
+      window.open(`https://wa.me/${num.replace(/\D/g, '')}`, '_blank');
+    }
+  }
+
   // Kanban grouped by status
   const kanbanGroups: Record<string, Lead[]> = {};
   statuses.forEach((s) => { kanbanGroups[s.value] = []; });
@@ -130,10 +201,18 @@ export default function LeadsClient({
   });
 
   return (
-    <div className="p-6 flex flex-col gap-6 animate-fade-in">
+    <div className="p-6 flex flex-col gap-6 animate-fade-in relative">
+      {toast && (
+        <div className={`toast toast-${toast.type} absolute top-4 right-4 z-50`}>
+          {toast.type === 'success' ? '✅' : '❌'} {toast.msg}
+        </div>
+      )}
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
+          <Link href={role === 'admin' ? "/admin/dashboard" : "/dashboard"} className="text-sm mb-2 inline-flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+            ← Back to Dashboard
+          </Link>
           <h1 className="text-2xl font-bold text-white">Leads</h1>
           <p style={{ color: 'var(--text-secondary)' }}>{total} total</p>
         </div>
@@ -205,6 +284,20 @@ export default function LeadsClient({
           <button className="btn-secondary btn-sm" onClick={() => setSelected(new Set())}>
             Cancel
           </button>
+          <div className="ml-auto flex items-center gap-2">
+            {bulkGenerateProgress && (
+              <span className="text-xs text-blue-400 font-mono animate-pulse">
+                {bulkGenerateProgress.message} ({bulkGenerateProgress.current}/{bulkGenerateProgress.total})
+              </span>
+            )}
+            <button 
+              className="btn-primary btn-sm" 
+              onClick={bulkGeneratePitches}
+              disabled={bulkGenerateProgress !== null || bulkLoading}
+            >
+              {bulkGenerateProgress ? '⏳ Generating...' : '✨ Bulk Pitch Out'}
+            </button>
+          </div>
           {bulkLoading && <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Updating...</span>}
         </div>
       )}
@@ -218,58 +311,82 @@ export default function LeadsClient({
         </div>
       ) : view === 'table' ? (
         <>
-          <div className="table-container card p-0">
-            <table>
+          <div className="w-full overflow-x-auto pb-4">
+            <table className="w-full text-sm border-separate border-spacing-y-4">
               <thead>
                 <tr>
-                  <th className="w-10">
-                    <input type="checkbox" onChange={toggleAll} checked={selected.size === leads.length && leads.length > 0} />
+                  <th className="w-10 px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">
+                    <input type="checkbox" onChange={toggleAll} checked={selected.size === leads.length && leads.length > 0} className="w-4 h-4 rounded border-gray-600 bg-gray-700" />
                   </th>
-                  <th>Business</th>
-                  <th>City</th>
-                  <th>Status</th>
-                  <th>Priority</th>
-                  <th>Follow-up</th>
-                  <th>Added</th>
-                  <th></th>
+                  <th className="px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Business</th>
+                  <th className="px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">City</th>
+                  <th className="px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Status</th>
+                  <th className="px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Priority</th>
+                  <th className="px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">AI Pitch</th>
+                  <th className="px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Assigned To</th>
+                  <th className="px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Follow-up</th>
+                  <th className="px-6 py-2 text-left font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Added</th>
+                  <th className="px-6 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {leads.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center" style={{ color: 'var(--text-muted)' }}>
+                    <td colSpan={8} className="py-16 text-center bg-white/5 rounded-2xl border border-[var(--border)]" style={{ color: 'var(--text-muted)' }}>
                       No leads found
                     </td>
                   </tr>
                 ) : (
                   leads.map((lead) => (
-                    <tr key={lead.id} className={selected.has(lead.id) ? 'ring-1 ring-blue-500/20' : ''}>
-                      <td>
+                    <tr key={lead.id} className={`group bg-white/5 hover:bg-white/10 transition-all duration-300 shadow-sm hover:shadow-md ${selected.has(lead.id) ? 'ring-2 ring-blue-500/50' : ''}`}>
+                      <td className="px-6 py-5 rounded-l-2xl border-y border-l border-[var(--border)]">
                         <input
                           type="checkbox"
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-700"
                           checked={selected.has(lead.id)}
                           onChange={() => toggleSelect(lead.id)}
                         />
                       </td>
-                      <td>
-                        <div className="font-medium text-white">{lead.business_name}</div>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{lead.category}</div>
+                      <td className="px-6 py-5 border-y border-[var(--border)]">
+                        <div className="font-bold text-white text-base mb-1">{lead.business_name}</div>
+                        <div className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--brand-400)' }}>{lead.category}</div>
                       </td>
-                      <td style={{ color: 'var(--text-secondary)' }}>{lead.city}</td>
-                      <td>{statusBadge(lead.status)}</td>
-                      <td>
+                      <td className="px-6 py-5 border-y border-[var(--border)] font-medium" style={{ color: 'var(--text-secondary)' }}>{lead.city}</td>
+                      <td className="px-6 py-5 border-y border-[var(--border)]">{statusBadge(lead.status)}</td>
+                      <td className="px-6 py-5 border-y border-[var(--border)]">
                         {lead.priority && (
-                          <>{priorityDot(lead.priority)}<span className="text-xs capitalize" style={{ color: 'var(--text-secondary)' }}>{lead.priority}</span></>
+                          <div className="flex items-center gap-2">
+                            {priorityDot(lead.priority)}
+                            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>{lead.priority}</span>
+                          </div>
                         )}
                       </td>
-                      <td className="text-xs" style={{ color: lead.next_followup_at && new Date(lead.next_followup_at) < new Date() ? '#f87171' : 'var(--text-secondary)' }}>
+                      <td className="px-6 py-5 border-y border-[var(--border)]">
+                        {bulkGenerateProgress?.currentId === lead.id ? (
+                          <span className="badge-blue animate-pulse flex items-center gap-1">✨ Generating...</span>
+                        ) : lead.has_pitch ? (
+                          <span className="badge-green flex items-center gap-1">✅ Generated</span>
+                        ) : (
+                          <span className="badge-gray flex items-center gap-1">⏳ Pending</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-5 border-y border-[var(--border)] font-medium text-sm text-white">
+                        {users.find(u => u.id === lead.assigned_to)?.username || 'Unassigned'}
+                      </td>
+                      <td className="px-6 py-5 border-y border-[var(--border)] text-sm font-medium" style={{ color: lead.next_followup_at && new Date(lead.next_followup_at) < new Date() ? '#fca5a5' : 'var(--text-secondary)' }}>
                         {lead.next_followup_at ? new Date(lead.next_followup_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
                       </td>
-                      <td className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <td className="px-6 py-5 border-y border-[var(--border)] text-sm" style={{ color: 'var(--text-muted)' }}>
                         {lead.created_at ? new Date(lead.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
                       </td>
-                      <td>
-                        <Link href={`/leads/${lead.id}`} className="btn-secondary btn-sm">View</Link>
+                      <td className="px-6 py-5 rounded-r-2xl border-y border-r border-[var(--border)] text-right flex items-center justify-end gap-2">
+                        <button 
+                          className="btn-primary btn-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => openWhatsAppPitch(lead)}
+                        >
+                          💬 WhatsApp
+                        </button>
+                        <Link href={`/leads/${lead.id}`} className="btn-secondary btn-sm opacity-0 group-hover:opacity-100 transition-opacity">View Details</Link>
                       </td>
                     </tr>
                   ))

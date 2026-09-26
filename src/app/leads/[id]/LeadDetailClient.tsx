@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import type { Lead, Research, CallNote, Pitch, Message, Activity, Service, ConfigItem, User, SessionUser } from '@/lib/types';
+import type { Lead, Research, CallNote, Pitch, Message, Activity, Service, ConfigItem, User, SessionUser, Deal } from '@/lib/types';
 
 interface Props {
   lead: Lead;
@@ -16,6 +16,7 @@ interface Props {
   lostReasons: ConfigItem[];
   users: User[];
   session: SessionUser;
+  deal: Deal | null;
 }
 
 function AuditChips({ auditResults }: { auditResults: string }) {
@@ -49,6 +50,9 @@ function MessageThread({ messages }: { messages: Message[] }) {
         messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.direction === 'sent' ? 'justify-end' : 'justify-start'}`}>
             <div className={msg.direction === 'sent' ? 'msg-sent' : 'msg-received'}>
+              {msg.user_id === 'anweo_ai' && (
+                <p className="text-xs font-bold mb-1" style={{ color: 'var(--brand-400)' }}>Anweo AI</p>
+              )}
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message_text}</p>
               <p className="text-[10px] mt-1 opacity-60">
                 {new Date(msg.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -73,12 +77,39 @@ export default function LeadDetailClient({
   lostReasons,
   users,
   session,
+  deal: initialDeal,
 }: Props) {
   const [lead, setLead] = useState(initialLead);
+  const [deal, setDeal] = useState(initialDeal);
   const [pitches, setPitches] = useState(initialPitches);
   const [messages, setMessages] = useState(initialMessages);
-  const [activeTab, setActiveTab] = useState<'overview' | 'pitch' | 'call' | 'messages' | 'activity'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pitch' | 'call' | 'messages' | 'activity' | 'deal'>('overview');
   const [generating, setGenerating] = useState<string | null>(null);
+  
+  const loadingStatuses = [
+    "Initializing AI engines...",
+    "Searching on web...",
+    "Collecting data...",
+    "Checking website...",
+    "Analyzing competitor data...",
+    "Checking what client needs...",
+    "Synthesizing results...",
+    "Finalizing generation..."
+  ];
+  const [loadingText, setLoadingText] = useState(loadingStatuses[0]);
+
+  useEffect(() => {
+    if (generating) {
+      let i = 0;
+      setLoadingText(loadingStatuses[0]);
+      const t = setInterval(() => {
+        i = (i + 1) % loadingStatuses.length;
+        setLoadingText(loadingStatuses[i]);
+      }, 1500);
+      return () => clearInterval(t);
+    }
+  }, [generating]);
+
   const [selectedService, setSelectedService] = useState(research?.recommended_service_id || services[0]?.id || '');
   const [pitchLanguage, setPitchLanguage] = useState<'english' | 'malayalam' | 'manglish'>('english');
   const [editingPitch, setEditingPitch] = useState<string | null>(null);
@@ -88,7 +119,9 @@ export default function LeadDetailClient({
   const [statusEdit, setStatusEdit] = useState(lead.status);
   const [lostReason, setLostReason] = useState(lead.lost_reason);
   const [nextFollowup, setNextFollowup] = useState(lead.next_followup_at?.slice(0, 16) || '');
+  const [notesEdit, setNotesEdit] = useState(lead.notes || '');
   const [saving, setSaving] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   function showToast(msg: string, type: 'success' | 'error' = 'success') {
@@ -180,11 +213,82 @@ export default function LeadDetailClient({
     setSaving(false);
   }
 
+  async function saveNotes() {
+    setSavingNotes(true);
+    const res = await fetch(`/api/leads/${lead.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: notesEdit }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setLead(data.data);
+      showToast('Notes saved');
+    } else {
+      showToast(data.error ?? 'Save failed', 'error');
+    }
+    setSavingNotes(false);
+  }
+
+  // --- Deal state ---
+  const [dealForm, setDealForm] = useState({
+    deal_value: deal?.deal_value || '',
+    advance_paid: deal?.advance_paid || '',
+    balance_due: deal?.balance_due || '',
+    service_id: deal?.service_id || '',
+    delivery_status: deal?.delivery_status || 'In Progress',
+  });
+  const [savingDeal, setSavingDeal] = useState(false);
+
+  async function saveDeal() {
+    setSavingDeal(true);
+    try {
+      if (deal) {
+        // Update existing deal
+        const res = await fetch(`/api/deals/${deal.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dealForm)
+        });
+        const data = await res.json();
+        if (data.success) {
+          setDeal(data.data);
+          setLead(l => ({ ...l, deal_value: dealForm.deal_value }));
+          showToast('Deal updated');
+        } else {
+          showToast(data.error || 'Failed', 'error');
+        }
+      } else {
+        // Create new deal
+        const res = await fetch(`/api/deals`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lead_id: lead.id,
+            ...dealForm,
+            service_name_snapshot: services.find(s => s.id === dealForm.service_id)?.name || ''
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setDeal(data.data);
+          setLead(l => ({ ...l, deal_value: dealForm.deal_value }));
+          showToast('Deal created');
+        } else {
+          showToast(data.error || 'Failed', 'error');
+        }
+      }
+    } finally {
+      setSavingDeal(false);
+    }
+  }
+
   const latestPitch = pitches[0] ?? null;
-  const canEdit = session.role === 'admin' || lead.assigned_to === session.id;
+  const canEdit = true; // All team members can edit any lead
 
   const TABS = [
     { id: 'overview', label: '📊 Overview' },
+    { id: 'deal', label: '💰 Payments' },
     { id: 'pitch', label: `📝 Pitch${pitches.length > 0 ? ` (${pitches.length})` : ''}` },
     { id: 'call', label: '📞 Call Note' },
     { id: 'messages', label: `💬 Messages${messages.length > 0 ? ` (${messages.length})` : ''}` },
@@ -219,31 +323,35 @@ export default function LeadDetailClient({
 
         {/* AI generate buttons */}
         {canEdit && (
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="btn-secondary btn-sm"
-              onClick={() => generate('research')}
-              disabled={!!generating}
-            >
-              {generating === 'research' ? <span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> : '🔍'}
-              Research
-            </button>
-            <button
-              className="btn-secondary btn-sm"
-              onClick={() => generate('call_note')}
-              disabled={!!generating}
-            >
-              {generating === 'call_note' ? <span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> : '📞'}
-              Call Note
-            </button>
-            <button
-              className="btn-primary btn-sm"
-              onClick={() => generate('pitch')}
-              disabled={!!generating}
-            >
-              {generating === 'pitch' ? <span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> : '✨'}
-              Generate Pitch
-            </button>
+          <div className="flex flex-wrap gap-2 items-center">
+            {generating && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-medium animate-pulse mr-2">
+                <span className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+                {loadingText}
+              </div>
+            )}
+            {!generating && (
+              <>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => generate('research')}
+                >
+                  🔍 Research
+                </button>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => generate('call_note')}
+                >
+                  📞 Call Note
+                </button>
+                <button
+                  className="btn-primary btn-sm"
+                  onClick={() => generate('pitch')}
+                >
+                  ✨ Generate Pitch
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -327,21 +435,62 @@ export default function LeadDetailClient({
                 </div>
               </div>
 
-              {research && (
-                <div className="card">
-                  <h3 className="text-sm font-semibold text-white mb-3">🤖 AI Research</h3>
+              {/* Internal Notes */}
+              <div className="card md:col-span-2">
+                <h3 className="text-sm font-semibold text-white mb-3">📝 Internal Notes</h3>
+                <textarea
+                  className="textarea w-full text-sm"
+                  rows={4}
+                  placeholder="Jot down important details about this client..."
+                  value={notesEdit}
+                  onChange={(e) => setNotesEdit(e.target.value)}
+                />
+                <div className="flex justify-end mt-3">
+                  <button className="btn-primary btn-sm" onClick={saveNotes} disabled={savingNotes}>
+                    {savingNotes ? '⏳ Saving...' : '💾 Save Notes'}
+                  </button>
+                </div>
+              </div>
+
+              {/* AI Findings */}
+              <div className="card">
+                <h3 className="text-sm font-semibold text-white mb-3">🤖 AI Findings</h3>
+                {!research ? (
+                  <div className="empty-state py-4">
+                    <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>No AI findings generated yet.</p>
+                    <button className="btn-secondary btn-sm" onClick={() => generate('research')} disabled={!!generating}>
+                      {generating === 'research' ? '⏳ Analyzing...' : '🔍 Run Research'}
+                    </button>
+                  </div>
+                ) : (
                   <div className="flex flex-col gap-3 text-sm">
                     {research.owner_name && research.owner_name !== 'unknown' && (
                       <div><span style={{ color: 'var(--text-muted)' }}>Owner: </span><span className="text-white">{research.owner_name}</span></div>
                     )}
                     {research.summary && <p style={{ color: 'var(--text-secondary)' }}>{research.summary}</p>}
+                    
+                    {research.business_story && (
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Business Story: </span>
+                        <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>{research.business_story}</p>
+                      </div>
+                    )}
+                    
+                    {research.review_highlights && (
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Review Highlights: </span>
+                        <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>{research.review_highlights}</p>
+                      </div>
+                    )}
+
                     {research.opportunity_summary && (
-                      <div className="rounded-xl p-3" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
-                        <p className="text-sm" style={{ color: 'var(--brand-400)' }}>{research.opportunity_summary}</p>
+                      <div className="rounded-xl p-3 mt-2" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                        <span className="text-xs font-semibold mb-1 block" style={{ color: 'var(--brand-500)' }}>Opportunity</span>
+                        <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{research.opportunity_summary}</p>
                       </div>
                     )}
                     {research.recommended_service_id && (
-                      <div>
+                      <div className="mt-1">
                         <span style={{ color: 'var(--text-muted)' }}>Recommended: </span>
                         <span className="badge-blue">
                           {services.find((s) => s.id === research.recommended_service_id)?.name ?? research.recommended_service_id}
@@ -349,8 +498,83 @@ export default function LeadDetailClient({
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Deal & Payments */}
+          {activeTab === 'deal' && (
+            <div className="card max-w-xl animate-fade-in">
+              <h3 className="text-lg font-bold text-white mb-4">Deal & Payments</h3>
+              <div className="flex flex-col gap-4">
+                <div className="form-group">
+                  <label className="label">Service Sold</label>
+                  <select
+                    className="select"
+                    value={dealForm.service_id}
+                    onChange={(e) => setDealForm({ ...dealForm, service_id: e.target.value })}
+                  >
+                    <option value="">Select a service</option>
+                    {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </div>
-              )}
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label className="label">Total Deal Value (₹)</label>
+                    <input
+                      type="number"
+                      className="input"
+                      placeholder="e.g. 15000"
+                      value={dealForm.deal_value}
+                      onChange={(e) => setDealForm({ ...dealForm, deal_value: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="label">Advance Paid (₹)</label>
+                    <input
+                      type="number"
+                      className="input"
+                      placeholder="e.g. 5000"
+                      value={dealForm.advance_paid}
+                      onChange={(e) => setDealForm({ ...dealForm, advance_paid: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label className="label">Balance Due (₹)</label>
+                    <input
+                      type="number"
+                      className="input"
+                      placeholder="e.g. 10000"
+                      value={dealForm.balance_due}
+                      onChange={(e) => setDealForm({ ...dealForm, balance_due: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="label">Delivery Status</label>
+                    <select
+                      className="select"
+                      value={dealForm.delivery_status}
+                      onChange={(e) => setDealForm({ ...dealForm, delivery_status: e.target.value })}
+                    >
+                      <option value="Not Started">Not Started</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Delivered">Delivered</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <button className="btn-primary" onClick={saveDeal} disabled={savingDeal}>
+                    {savingDeal ? '⏳ Saving...' : '💾 Save Deal Details'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -374,8 +598,19 @@ export default function LeadDetailClient({
                   </select>
                 </div>
                 <button className="btn-primary btn-sm" onClick={() => generate('pitch')} disabled={!!generating}>
-                  {generating === 'pitch' ? '⏳ Generating...' : '✨ Generate New Pitch'}
+                  {generating === 'pitch' ? `⏳ ${loadingText}` : '✨ Generate New Pitch'}
                 </button>
+              </div>
+
+              {/* Pitch Psychology Guide */}
+              <div className="card mb-2 animate-fade-in" style={{ borderLeft: '4px solid var(--brand-500)', background: 'rgba(59,130,246,0.03)' }}>
+                <h3 className="text-sm font-semibold text-white mb-2">🧠 Pitch Strategy & Psychology</h3>
+                <ul className="text-sm space-y-1" style={{ color: 'var(--text-secondary)' }}>
+                  <li><strong className="text-white">Reciprocity:</strong> Lead with value (e.g., a free mini-audit or a specific observation) before asking for a meeting.</li>
+                  <li><strong className="text-white">Social Proof:</strong> Mention how similar businesses in their city/niche grew with your specific service.</li>
+                  <li><strong className="text-white">Frictionless CTA:</strong> Don't ask them to "buy". Ask a low-friction question like, <span className="italic">"Are you open to a quick 5-min chat about this?"</span></li>
+                  <li><strong className="text-white">Personalization:</strong> Always reference their specific pain point (from the Research tab) so it doesn't sound automated.</li>
+                </ul>
               </div>
 
               {pitches.length === 0 ? (

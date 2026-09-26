@@ -7,8 +7,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Type assertions are safe here — all values come from Google Sheets (strings)
 
-// Re-export user helpers that pages import from '@/lib/data'
-export { getUserById, getActiveUsers } from './users';
+
 
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -46,10 +45,84 @@ export async function getConfig(): Promise<ConfigItem[]> {
 
 export async function getConfigList(listName: string): Promise<ConfigItem[]> {
   const all = await getConfig();
-  return all
+  const items = all
     .filter((c) => c.list_name === listName && c.active === 'TRUE')
     .sort((a, b) => parseInt(a.sort_order, 10) - parseInt(b.sort_order, 10));
+
+  if (items.length === 0) {
+    // Hardcoded fallback so the CRM never breaks on empty sheets
+    const FALLBACKS: Record<string, ConfigItem[]> = {
+      pipeline_status: [
+        { list_name: 'pipeline_status', value: 'New',             label: 'New',             sort_order: '1', active: 'TRUE' },
+        { list_name: 'pipeline_status', value: 'Replied',         label: 'Replied',         sort_order: '2', active: 'TRUE' },
+        { list_name: 'pipeline_status', value: 'Hot Lead',        label: 'Hot Lead',        sort_order: '3', active: 'TRUE' },
+        { list_name: 'pipeline_status', value: 'Payment Pending', label: 'Payment Pending', sort_order: '4', active: 'TRUE' },
+        { list_name: 'pipeline_status', value: 'Won',             label: 'Won',             sort_order: '5', active: 'TRUE' },
+        { list_name: 'pipeline_status', value: 'Lost',            label: 'Lost',            sort_order: '6', active: 'TRUE' },
+      ],
+      lead_status: [
+        { list_name: 'lead_status', value: 'New',             label: 'New',             sort_order: '1', active: 'TRUE' },
+        { list_name: 'lead_status', value: 'Replied',         label: 'Replied',         sort_order: '2', active: 'TRUE' },
+        { list_name: 'lead_status', value: 'Hot Lead',        label: 'Hot Lead',        sort_order: '3', active: 'TRUE' },
+        { list_name: 'lead_status', value: 'Payment Pending', label: 'Payment Pending', sort_order: '4', active: 'TRUE' },
+        { list_name: 'lead_status', value: 'Won',             label: 'Won',             sort_order: '5', active: 'TRUE' },
+        { list_name: 'lead_status', value: 'Lost',            label: 'Lost',            sort_order: '6', active: 'TRUE' },
+      ],
+      lost_reason: [
+        { list_name: 'lost_reason', value: 'not_interested', label: 'Not Interested',     sort_order: '1', active: 'TRUE' },
+        { list_name: 'lost_reason', value: 'too_expensive',  label: 'Too Expensive',      sort_order: '2', active: 'TRUE' },
+        { list_name: 'lost_reason', value: 'competitor',     label: 'Went to Competitor', sort_order: '3', active: 'TRUE' },
+        { list_name: 'lost_reason', value: 'no_budget',      label: 'No Budget',          sort_order: '4', active: 'TRUE' },
+        { list_name: 'lost_reason', value: 'no_response',    label: 'No Response',        sort_order: '5', active: 'TRUE' },
+        { list_name: 'lost_reason', value: 'bad_timing',     label: 'Bad Timing',         sort_order: '6', active: 'TRUE' },
+      ],
+      lead_source: [
+        { list_name: 'lead_source', value: 'Google',    label: 'Google Maps', sort_order: '1', active: 'TRUE' },
+        { list_name: 'lead_source', value: 'Instagram', label: 'Instagram',   sort_order: '2', active: 'TRUE' },
+        { list_name: 'lead_source', value: 'Facebook',  label: 'Facebook',    sort_order: '3', active: 'TRUE' },
+        { list_name: 'lead_source', value: 'LinkedIn',  label: 'LinkedIn',    sort_order: '4', active: 'TRUE' },
+        { list_name: 'lead_source', value: 'WhatsApp',  label: 'WhatsApp',    sort_order: '5', active: 'TRUE' },
+        { list_name: 'lead_source', value: 'Referral',  label: 'Referral',    sort_order: '6', active: 'TRUE' },
+        { list_name: 'lead_source', value: 'Walk_in',   label: 'Walk-in',     sort_order: '7', active: 'TRUE' },
+        { list_name: 'lead_source', value: 'Cold_Call', label: 'Cold Call',   sort_order: '8', active: 'TRUE' },
+        { list_name: 'lead_source', value: 'Website',   label: 'Website',     sort_order: '9', active: 'TRUE' },
+      ],
+      category: [
+        { list_name: 'category', value: 'Restaurant',  label: 'Restaurant',        sort_order: '1',  active: 'TRUE' },
+        { list_name: 'category', value: 'Retail',      label: 'Retail',            sort_order: '2',  active: 'TRUE' },
+        { list_name: 'category', value: 'IT',          label: 'IT / Software',     sort_order: '3',  active: 'TRUE' },
+        { list_name: 'category', value: 'Healthcare',  label: 'Healthcare',        sort_order: '4',  active: 'TRUE' },
+        { list_name: 'category', value: 'Education',   label: 'Education',         sort_order: '5',  active: 'TRUE' },
+        { list_name: 'category', value: 'Real_Estate', label: 'Real Estate',       sort_order: '6',  active: 'TRUE' },
+        { list_name: 'category', value: 'Fitness',     label: 'Fitness / Gym',     sort_order: '7',  active: 'TRUE' },
+        { list_name: 'category', value: 'Beauty',      label: 'Beauty / Salon',    sort_order: '8',  active: 'TRUE' },
+        { list_name: 'category', value: 'Automotive',  label: 'Automotive',        sort_order: '9',  active: 'TRUE' },
+        { list_name: 'category', value: 'Hospitality', label: 'Hospitality',       sort_order: '10', active: 'TRUE' },
+        { list_name: 'category', value: 'Finance',     label: 'Finance / Banking', sort_order: '11', active: 'TRUE' },
+        { list_name: 'category', value: 'Other',       label: 'Other',             sort_order: '99', active: 'TRUE' },
+      ],
+      priority: [
+        { list_name: 'priority', value: 'low',    label: 'Low',    sort_order: '1', active: 'TRUE' },
+        { list_name: 'priority', value: 'medium', label: 'Medium', sort_order: '2', active: 'TRUE' },
+        { list_name: 'priority', value: 'high',   label: 'High',   sort_order: '3', active: 'TRUE' },
+        { list_name: 'priority', value: 'urgent', label: 'Urgent', sort_order: '4', active: 'TRUE' },
+      ],
+      tag: [
+        { list_name: 'tag', value: 'high_value',  label: 'High Value',  sort_order: '1', active: 'TRUE' },
+        { list_name: 'tag', value: 'follow_up',   label: 'Follow Up',   sort_order: '2', active: 'TRUE' },
+        { list_name: 'tag', value: 'nurture',     label: 'Nurture',     sort_order: '3', active: 'TRUE' },
+        { list_name: 'tag', value: 'cold',        label: 'Cold',        sort_order: '4', active: 'TRUE' },
+        { list_name: 'tag', value: 'vip',         label: 'VIP',         sort_order: '5', active: 'TRUE' },
+        { list_name: 'tag', value: 'demo_booked', label: 'Demo Booked', sort_order: '6', active: 'TRUE' },
+        { list_name: 'tag', value: 'trial',       label: 'On Trial',    sort_order: '7', active: 'TRUE' },
+      ],
+    };
+    return FALLBACKS[listName] ?? [];
+  }
+
+  return items;
 }
+
 
 export async function upsertConfigItem(item: ConfigItem): Promise<void> {
   const all = await getConfig();
@@ -103,8 +176,8 @@ export async function getServices(): Promise<Service[]> {
 export async function getActiveServices(): Promise<Service[]> {
   const services = await getServices();
   return services
-    .filter((s) => s.active === 'TRUE')
-    .sort((a, b) => parseInt(a.priority_rank, 10) - parseInt(b.priority_rank, 10));
+    .filter((s) => !s.active || s.active.toUpperCase() !== 'FALSE')
+    .sort((a, b) => (parseInt(a.priority_rank, 10) || 99) - (parseInt(b.priority_rank, 10) || 99));
 }
 
 export async function getServiceById(id: string): Promise<Service | null> {
@@ -153,12 +226,12 @@ export async function getActivePackages(): Promise<Package[]> {
   const pkgs = await getPackages();
   const activeServices = await getActiveServices();
   const activeServiceIds = new Set(activeServices.map((s) => s.id));
-  return pkgs.filter((p) => p.active === 'TRUE' && activeServiceIds.has(p.service_id));
+  return pkgs.filter((p) => (!p.active || p.active.toUpperCase() !== 'FALSE') && activeServiceIds.has(p.service_id));
 }
 
 export async function getPackagesByService(serviceId: string): Promise<Package[]> {
   const pkgs = await getPackages();
-  return pkgs.filter((p) => p.service_id === serviceId && p.active === 'TRUE');
+  return pkgs.filter((p) => p.service_id === serviceId && (!p.active || p.active.toUpperCase() !== 'FALSE'));
 }
 
 export async function createPackage(data: Omit<Package, 'id'>): Promise<Package> {
@@ -210,7 +283,7 @@ export async function getTemplates(): Promise<Template[]> {
 
 export async function getActiveTemplates(): Promise<Template[]> {
   const tmpl = await getTemplates();
-  return tmpl.filter((t) => t.active === 'TRUE');
+  return tmpl.filter((t) => !t.active || t.active.toUpperCase() !== 'FALSE');
 }
 
 export async function createTemplate(data: Omit<Template, 'id'>): Promise<Template> {
@@ -326,6 +399,18 @@ export async function updatePitch(id: string, updates: Partial<Pitch>): Promise<
   const headers = await getHeaders(TABS.PITCHES);
   await updateRow(TABS.PITCHES, rowIndex, headers, updated as Record<string, string>);
   return updated;
+}
+
+export async function deletePitch(id: string): Promise<boolean> {
+  const all = await readObjects<Pitch>(TABS.PITCHES);
+  const index = all.findIndex((p) => p.id === id);
+  if (index === -1) return false;
+  
+  // To delete, we must overwrite all rows without the deleted one
+  const filtered = all.filter((p) => p.id !== id);
+  const headers = await getHeaders(TABS.PITCHES);
+  await overwriteDataRows(TABS.PITCHES, headers, filtered as unknown as Record<string, string>[]);
+  return true;
 }
 
 // ─── CallNotes ───────────────────────────────────────────────
@@ -466,3 +551,6 @@ export async function getStats(
       (!user || s.user === user)
   );
 }
+
+// Re-export user helpers that pages import from '@/lib/data'
+export { getUserById, getActiveUsers } from './users';

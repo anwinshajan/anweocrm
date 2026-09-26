@@ -9,6 +9,7 @@ import {
   getActivityForLead,
   getActiveServices,
   getConfigList,
+  getDealForLead,
   getActiveUsers,
 } from '@/lib/data';
 import LeadDetailClient from './LeadDetailClient';
@@ -25,17 +26,9 @@ export default async function LeadDetailPage({
   const lead = await getLeadById(id);
   if (!lead || lead.status === 'Deleted') notFound();
 
-  // Team members can only view their own leads
-  if (
-    session.role !== 'admin' &&
-    !session.permissions.can_view_all_leads &&
-    lead.assigned_to !== session.id &&
-    lead.added_by !== session.id
-  ) {
-    redirect('/leads');
-  }
+  // All team members can view any lead detail
 
-  const [research, callNote, pitches, messages, activity, services, statuses, lostReasons, users] =
+  const [research, callNote, pitches, messages, activity, services, statuses, lostReasons, users, deal] =
     await Promise.all([
       getResearchForLead(id),
       getCallNoteForLead(id),
@@ -46,6 +39,7 @@ export default async function LeadDetailPage({
       getConfigList('pipeline_status'),
       getConfigList('lost_reason'),
       getActiveUsers(),
+      getDealForLead(id),
     ]);
 
   return (
@@ -61,6 +55,7 @@ export default async function LeadDetailPage({
       lostReasons={lostReasons}
       users={users}
       session={session}
+      deal={deal}
     />
   );
 }

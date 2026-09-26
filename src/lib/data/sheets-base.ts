@@ -8,6 +8,7 @@
 // ============================================================
 
 import { getSheetsClient, SHEET_ID } from './sheets-client';
+import { TABS, HEADERS } from './tabs';
 
 // ─── Cache ───────────────────────────────────────────────────
 
@@ -107,10 +108,48 @@ async function flushWriteQueue() {
 }
 
 function enqueueWrite(tab: string, range: string, values: string[][]): Promise<void> {
+  if (!process.env.GOOGLE_SHEET_ID || process.env.GOOGLE_SHEET_ID.includes('your-google-sheet-id')) {
+    const cached = getFromCache(tab) || [HEADERS[tab]];
+    if (range.includes(':')) {
+      cached.push(...values);
+    } else {
+      const rowIndex = parseInt(range.match(/\d+/)?.[0] || '2') - 1;
+      cached[rowIndex] = values[0];
+    }
+    setCache(tab, cached);
+    return Promise.resolve();
+  }
   return new Promise((resolve, reject) => {
     writeQueue.push({ tab, range, values, resolve, reject });
     flushWriteQueue();
   });
+}
+
+// ─── Apps Script Adapter ──────────────────────────────────────
+
+async function callAppsScript<T>(payload: { action: string; [key: string]: unknown }): Promise<T> {
+  const url = process.env.GOOGLE_APPS_SCRIPT_URL;
+  if (!url) throw new Error('GOOGLE_APPS_SCRIPT_URL is not set');
+
+  const res = await withRetry(async () => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      throw new Error(`Apps Script responded with status ${response.status}`);
+    }
+    const json = await response.json();
+    if (json.error) {
+      throw new Error(`Apps Script Error: ${json.error}`);
+    }
+    return json as T;
+  });
+
+  return res;
 }
 
 // ─── Public helpers ───────────────────────────────────────────
@@ -122,6 +161,52 @@ export async function readTab(tab: string): Promise<string[][]> {
   const cached = getFromCache(tab);
   if (cached) return cached;
 
+  // 1. Google Apps Script Webhook
+  if (process.env.GOOGLE_APPS_SCRIPT_URL && !process.env.GOOGLE_APPS_SCRIPT_URL.includes('your-apps-script-url')) {
+    try {
+      const res = await callAppsScript<{ data: string[][] }>({
+        action: 'readTab',
+        tab,
+      });
+      const data = res.data && res.data.length > 0 ? res.data : [HEADERS[tab] || []];
+      setCache(tab, data);
+      return data;
+    } catch (e) {
+      console.error(`[readTab:AppsScript] Failed to read ${tab}:`, e);
+      // Fallback to cache or mock if available
+    }
+  }
+
+  // 2. Mock Fallback (when no credentials configured)
+  if (!process.env.GOOGLE_SHEET_ID || process.env.GOOGLE_SHEET_ID.includes('your-google-sheet-id')) {
+    const data: string[][] = [HEADERS[tab] || []];
+    if (tab === TABS.LEADS) {
+      data.push([
+        '1', 'Kerala Spice Hub', 'Restaurant', '9876543210', '9876543210', 'Kochi', 'Ernakulam', 'www.keralaspice.in', 'maps.google.com/kerala',
+        '4.5', '120', 'keralaspice', 'keralaspice', 'Google', 'Hot', 'high-value', 'admin-1', 'high', 'admin-1', 'admin-1', '', '', '', '', new Date().toISOString(), '', '', ''
+      ]);
+      data.push([
+        '2', 'Tech Solutions Cochin', 'IT', '9876543211', '9876543211', 'Kakkanad', 'Ernakulam', 'www.techsol.in', 'maps.google.com/tech',
+        '4.8', '50', 'techsol', 'techsol', 'LinkedIn', 'New', '', 'team-1', 'medium', 'admin-1', '', '', '', '', '', new Date().toISOString(), '', '', ''
+      ]);
+    } else if (tab === TABS.SERVICES) {
+      data.push(['s1', 'Local SEO', 'Dominate search', 'Local biz', 'Boost traffic', '1', 'TRUE', new Date().toISOString()]);
+      data.push(['s2', 'Social Media', 'IG Growth', 'Retail', 'Build brand', '2', 'TRUE', new Date().toISOString()]);
+    } else if (tab === TABS.USERS) {
+      data.push(['admin-1', 'admin', 'admin', 'admin', '{}', '10', '100', 'none', '0', 'TRUE', 'FALSE', '0', '', new Date().toISOString()]);
+      data.push(['team-1', 'admin1', 'admin1', 'team', '{}', '10', '100', 'none', '0', 'TRUE', 'FALSE', '0', '', new Date().toISOString()]);
+    } else if (tab === TABS.BRAND_KNOWLEDGE) {
+      data.push(['mission', 'To provide exceptional service.']);
+      data.push(['core_values', 'Integrity, Innovation, Customer Focus']);
+      data.push(['target_market', 'SMBs in tech sector']);
+    } else if (tab === TABS.CONFIG) {
+      // no extra mock rows needed for config
+    }
+    setCache(tab, data);
+    return data;
+  }
+
+  // 3. Google Sheets API (Service Account)
   const res = await withRetry(() =>
     getSheetsClient().spreadsheets.values.get({
       spreadsheetId: SHEET_ID(),
@@ -138,9 +223,7 @@ export async function readTab(tab: string): Promise<string[][]> {
  * Convert raw rows into objects using the first row as headers.
  * Tolerates extra/missing columns.
  */
-export function rowsToObjects<T extends Record<string, string>>(
-  rows: string[][]
-): T[] {
+export function rowsToObjects<T extends Record<string, string>>(rows: string[][]): T[] {
   if (rows.length < 1) return [];
   const headers = rows[0];
   return rows.slice(1).map((row) => {
@@ -192,6 +275,26 @@ export async function readObjects<T extends Record<string, string>>(
  * Invalidates cache.
  */
 export async function appendRows(tab: string, rows: string[][]): Promise<void> {
+  // 1. Google Apps Script Webhook
+  if (process.env.GOOGLE_APPS_SCRIPT_URL && !process.env.GOOGLE_APPS_SCRIPT_URL.includes('your-apps-script-url')) {
+    await callAppsScript({
+      action: 'appendRows',
+      tab,
+      rows,
+    });
+    invalidateCache(tab);
+    return;
+  }
+
+  // 2. Mock Fallback
+  if (!process.env.GOOGLE_SHEET_ID || process.env.GOOGLE_SHEET_ID.includes('your-google-sheet-id')) {
+    const cached = getFromCache(tab) || [HEADERS[tab]];
+    cached.push(...rows);
+    setCache(tab, cached);
+    return;
+  }
+
+  // 3. Service Account API
   await withRetry(() =>
     getSheetsClient().spreadsheets.values.append({
       spreadsheetId: SHEET_ID(),
@@ -215,9 +318,23 @@ export async function updateRow(
   obj: unknown
 ): Promise<void> {
   const record = obj as Record<string, string>;
+  const values = headers.map((h) => record[h] ?? '');
+
+  // 1. Google Apps Script Webhook
+  if (process.env.GOOGLE_APPS_SCRIPT_URL && !process.env.GOOGLE_APPS_SCRIPT_URL.includes('your-apps-script-url')) {
+    await callAppsScript({
+      action: 'updateRow',
+      tab,
+      rowIndex,
+      values,
+    });
+    invalidateCache(tab);
+    return;
+  }
+
+  // 2. Service Account / Mock Queue
   const range = `${tab}!A${rowIndex}`;
-  const values = [headers.map((h) => record[h] ?? '')];
-  await enqueueWrite(tab, range, values);
+  await enqueueWrite(tab, range, [values]);
   invalidateCache(tab);
 }
 
@@ -230,7 +347,21 @@ export async function overwriteDataRows(
   headers: string[],
   items: Record<string, string>[]
 ): Promise<void> {
-  // Clear from row 2 down, then write
+  const rows = items.length > 0 ? objectsToRows(headers, items as Record<string, string>[]) : [];
+
+  // 1. Google Apps Script Webhook
+  if (process.env.GOOGLE_APPS_SCRIPT_URL && !process.env.GOOGLE_APPS_SCRIPT_URL.includes('your-apps-script-url')) {
+    await callAppsScript({
+      action: 'overwriteDataRows',
+      tab,
+      headers,
+      rows,
+    });
+    invalidateCache(tab);
+    return;
+  }
+
+  // 2. Clear from row 2 down, then write
   await withRetry(() =>
     getSheetsClient().spreadsheets.values.clear({
       spreadsheetId: SHEET_ID(),
@@ -239,7 +370,6 @@ export async function overwriteDataRows(
   );
 
   if (items.length > 0) {
-    const rows = objectsToRows(headers, items as Record<string, string>[]);
     await appendRows(tab, rows);
   }
   invalidateCache(tab);
@@ -255,6 +385,18 @@ export async function ensureTab(
   tab: string,
   headers: string[]
 ): Promise<void> {
+  if (process.env.GOOGLE_APPS_SCRIPT_URL && !process.env.GOOGLE_APPS_SCRIPT_URL.includes('your-apps-script-url')) {
+    await callAppsScript({
+      action: 'initSheets',
+      headers: { [tab]: headers },
+    });
+    return;
+  }
+
+  if (!process.env.GOOGLE_SHEET_ID || process.env.GOOGLE_SHEET_ID.includes('your-google-sheet-id')) {
+    return;
+  }
+
   const sheets = getSheetsClient();
 
   // Get existing sheet metadata

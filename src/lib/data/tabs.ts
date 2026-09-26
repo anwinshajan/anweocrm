@@ -20,6 +20,7 @@ export const TABS = {
   STATS: 'Stats',
   CONFIG: 'Config',
   SETTINGS: 'Settings',
+  PAYMENTS: 'Payments',
 } as const;
 
 export const HEADERS: Record<string, string[]> = {
@@ -29,7 +30,7 @@ export const HEADERS: Record<string, string[]> = {
     'review_count', 'instagram', 'facebook', 'source', 'status', 'tags',
     'assigned_to', 'priority', 'added_by', 'first_messaged_by',
     'last_messaged_by', 'closed_by', 'deal_value', 'lost_reason',
-    'created_at', 'last_contacted_at', 'next_followup_at', 'closed_at',
+    'created_at', 'last_contacted_at', 'next_followup_at', 'closed_at', 'notes'
   ],
   [TABS.RESEARCH]: [
     'lead_id', 'summary', 'owner_name', 'business_story',
@@ -78,4 +79,5 @@ export const HEADERS: Record<string, string[]> = {
   [TABS.STATS]: ['date', 'user', 'metric', 'value'],
   [TABS.CONFIG]: ['list_name', 'value', 'label', 'sort_order', 'active'],
   [TABS.SETTINGS]: ['key', 'value'],
+  [TABS.PAYMENTS]: ['id', 'user_id', 'amount', 'type', 'method', 'reference', 'status', 'created_at', 'notes'],
 };

@@ -12,6 +12,7 @@ import {
   incrementStat,
   getSettings,
   addLog,
+  addMessage,
 } from '@/lib/data';
 import { generateResearch, generateCallNote, generatePitch } from '@/lib/ai';
 
@@ -20,26 +21,23 @@ import { generateResearch, generateCallNote, generatePitch } from '@/lib/ai';
 export const POST = withAuth(async ({ session, req }, context?: { params?: Promise<{ id: string }> }) => {
   const { id } = await (context?.params ?? Promise.resolve({ id: '' }));
   const body = await req.json();
-  const { action, serviceId, language = 'english' } = body;
+  const { action, serviceId, language = 'english', skipIfExists = false } = body;
 
   // Permission check
   const lead = await getLeadById(id);
   if (!lead) return apiError('Lead not found', 404);
 
-  if (
-    session.role !== 'admin' &&
-    !session.permissions.can_view_all_leads &&
-    lead.assigned_to !== session.id &&
-    lead.added_by !== session.id
-  ) {
-    return apiError('Forbidden', 403);
-  }
+  // All team members can generate AI content for any lead
 
   const settings = await getSettings();
 
   try {
     if (action === 'research') {
-      const research = await generateResearch(lead);
+      let research = await getResearchForLead(id);
+      if (skipIfExists && research) {
+        return apiSuccess(research);
+      }
+      research = await generateResearch(lead);
       await upsertResearch(research);
       await addActivity({
         lead_id: id,
@@ -57,6 +55,10 @@ export const POST = withAuth(async ({ session, req }, context?: { params?: Promi
       if (!research) {
         research = await generateResearch(lead);
         await upsertResearch(research);
+      }
+      if (skipIfExists) {
+        const existingNote = await getCallNoteForLead(id);
+        if (existingNote) return apiSuccess(existingNote);
       }
       const note = await generateCallNote(lead, research);
       await upsertCallNote({
@@ -82,13 +84,24 @@ export const POST = withAuth(async ({ session, req }, context?: { params?: Promi
         await upsertResearch(research);
       }
 
-      const targetServiceId = serviceId || research.recommended_service_id;
+      const existing = await getPitchesForLead(id);
+      if (skipIfExists && existing.length > 0) {
+        return apiSuccess(existing[0]);
+      }
+
+      const { getActiveServices } = require('@/lib/data');
+      const activeServices = await getActiveServices();
+      let targetServiceId = (serviceId || research.recommended_service_id) === 'unknown' ? '' : (serviceId || research.recommended_service_id);
+      
+      if (!targetServiceId && activeServices.length > 0) {
+        targetServiceId = activeServices[0].id;
+      }
+
       if (!targetServiceId) return apiError('No service specified and no recommendation available');
 
       const { message_text, wa_link } = await generatePitch(lead, research, targetServiceId, language);
 
       // Version = how many pitches exist for this lead + 1
-      const existing = await getPitchesForLead(id);
       const version = String(existing.length + 1);
 
       const pitch = await createPitch({
@@ -115,10 +128,70 @@ export const POST = withAuth(async ({ session, req }, context?: { params?: Promi
       return apiSuccess(pitch);
     }
 
-    return apiError('Invalid action. Use: research, call_note, pitch');
+    if (action === 'all') {
+      let research = await getResearchForLead(id);
+      if (!research) {
+        research = await generateResearch(lead);
+        await upsertResearch(research);
+      }
+      
+      const existingNote = await getCallNoteForLead(id);
+      if (!existingNote) {
+        const note = await generateCallNote(lead, research);
+        await upsertCallNote({
+          lead_id: id,
+          call_prep_note: note.call_prep_note,
+          opening_lines: note.opening_lines,
+          objection_handlers: note.objection_handlers,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      const existingPitch = await getPitchesForLead(id);
+      if (existingPitch.length === 0) {
+        const { getActiveServices } = require('@/lib/data');
+        const activeServices = await getActiveServices();
+        let targetServiceId = (serviceId || research.recommended_service_id) === 'unknown' ? '' : (serviceId || research.recommended_service_id);
+        
+        if (!targetServiceId && activeServices.length > 0) {
+          targetServiceId = activeServices[0].id;
+        }
+
+        if (targetServiceId) {
+          const { message_text, wa_link } = await generatePitch(lead, research, targetServiceId, language);
+          await createPitch({
+            lead_id: id,
+            service_id: targetServiceId,
+            message_text,
+            wa_link,
+            version: '1',
+            generated_by: session.id,
+            generated_at: new Date().toISOString(),
+            edited_by: '',
+          });
+        }
+      }
+
+      return apiSuccess({ success: true, message: 'All content generated' });
+    }
+
+    return apiError('Invalid action. Use: research, call_note, pitch, all');
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'AI generation failed';
     await addLog({ user: session.username, action: 'AI_ERROR', details: msg });
+
+    try {
+      await addMessage({
+        lead_id: id,
+        user_id: 'anweo_ai',
+        direction: 'received',
+        message_text: `❌ AI Error:\n${msg}`,
+        template_used: 'AI Error',
+      });
+    } catch (e) {
+      console.error('Failed to log AI error as message', e);
+    }
+
     return apiError(msg, 500);
   }
 });

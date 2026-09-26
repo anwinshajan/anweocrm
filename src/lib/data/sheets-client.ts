@@ -11,8 +11,8 @@ export function getSheetsClient() {
 
   const auth = new google.auth.GoogleAuth({
     credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
-      private_key: process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'mock@example.com',
+      private_key: (process.env.GOOGLE_PRIVATE_KEY || 'mock-key').replace(/\\n/g, '\n'),
     },
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });

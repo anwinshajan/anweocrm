@@ -12,10 +12,10 @@ export type RouteContext = {
   req: NextRequest;
 };
 
-type Handler = (ctx: RouteContext) => Promise<NextResponse>;
+type Handler = (ctx: RouteContext, context: any) => Promise<NextResponse>;
 
 export function withAuth(handler: Handler, requireAdmin = false) {
-  return async (req: NextRequest): Promise<NextResponse> => {
+  return async (req: NextRequest, context: any): Promise<NextResponse> => {
     const session = await getSession();
 
     if (!session) {
@@ -27,7 +27,7 @@ export function withAuth(handler: Handler, requireAdmin = false) {
     }
 
     try {
-      return await handler({ session, req });
+      return await handler({ session, req }, context);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Internal server error';
       console.error('[API Error]', message, err);

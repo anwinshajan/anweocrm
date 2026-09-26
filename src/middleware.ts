@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from './lib/auth';
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/'];
 const ADMIN_ONLY_PATHS = [
   '/admin',
   '/api/admin',
@@ -15,7 +15,7 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Allow public paths
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (PUBLIC_PATHS.includes(pathname) || pathname.startsWith('/api/auth/login')) {
     return NextResponse.next();
   }
 
@@ -45,8 +45,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', req.url));
   }
 
-  // Force password change
-  if (session.must_change_password && pathname !== '/change-password') {
+  // Force password change — but let the API call through too
+  if (
+    session.must_change_password &&
+    pathname !== '/change-password' &&
+    pathname !== '/api/auth/change-password' &&
+    pathname !== '/api/auth/logout'
+  ) {
     return NextResponse.redirect(new URL('/change-password', req.url));
   }
 

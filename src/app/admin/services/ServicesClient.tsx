@@ -91,6 +91,52 @@ export default function AdminServicesClient({ services: initServices, packages: 
     }
   }
 
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (!draggingId || draggingId === id) return;
+
+    setServices((prev) => {
+      const copy = [...prev].sort((a, b) => parseInt(a.priority_rank, 10) - parseInt(b.priority_rank, 10));
+      const sourceIndex = copy.findIndex((s) => s.id === draggingId);
+      const targetIndex = copy.findIndex((s) => s.id === id);
+      
+      if (sourceIndex === -1 || targetIndex === -1) return prev;
+
+      const [draggedItem] = copy.splice(sourceIndex, 1);
+      copy.splice(targetIndex, 0, draggedItem);
+
+      return copy.map((svc, i) => ({ ...svc, priority_rank: String(i + 1) }));
+    });
+  };
+
+  const handleDrop = async () => {
+    setDraggingId(null);
+    setSaving(true);
+    try {
+      const currentSorted = [...services].sort((a, b) => parseInt(a.priority_rank, 10) - parseInt(b.priority_rank, 10));
+      const promises = currentSorted.map((svc) =>
+        fetch(`/api/services/${svc.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ priority_rank: svc.priority_rank }),
+        })
+      );
+      await Promise.all(promises);
+      showToast('Priority order updated successfully!');
+    } catch (e) {
+      showToast('Error saving priority order');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const sorted = [...services].sort((a, b) => parseInt(a.priority_rank, 10) - parseInt(b.priority_rank, 10));
 
   return (
@@ -102,7 +148,7 @@ export default function AdminServicesClient({ services: initServices, packages: 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Services</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Manage the services Anweo offers. These power all AI prompts and pitches.</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Manage the services Anweo offers. Drag and drop to reorder their priority.</p>
         </div>
         <button className="btn-primary" onClick={() => { setEditId(null); setForm(emptyService()); }}>
           ➕ Add Service
@@ -122,13 +168,9 @@ export default function AdminServicesClient({ services: initServices, packages: 
               <label className="label">Description</label>
               <textarea className="textarea" rows={2} value={form.description ?? ''} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="What this service delivers" />
             </div>
-            <div className="form-group">
+            <div className="form-group md:col-span-2">
               <label className="label">Ideal Customer</label>
               <input className="input" value={form.ideal_customer ?? ''} onChange={(e) => setForm((f) => ({ ...f, ideal_customer: e.target.value }))} placeholder="Who this is best for" />
-            </div>
-            <div className="form-group">
-              <label className="label">Priority Rank (lower = higher priority)</label>
-              <input type="number" className="input" value={form.priority_rank ?? ''} onChange={(e) => setForm((f) => ({ ...f, priority_rank: e.target.value }))} />
             </div>
             <div className="form-group md:col-span-2">
               <label className="label">Pitch Angle</label>
@@ -152,12 +194,22 @@ export default function AdminServicesClient({ services: initServices, packages: 
           const svcPackages = packages.filter((p) => p.service_id === svc.id);
           const isExpanded = expandedService === svc.id;
           return (
-            <div key={svc.id} className="card" style={{ opacity: svc.active === 'FALSE' ? 0.6 : 1 }}>
+            <div
+              key={svc.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, svc.id)}
+              onDragOver={(e) => handleDragOver(e, svc.id)}
+              onDrop={handleDrop}
+              onDragEnd={() => setDraggingId(null)}
+              className={`card cursor-grab active:cursor-grabbing transition-transform ${draggingId === svc.id ? 'opacity-50 scale-95' : ''}`}
+              style={{ opacity: svc.active === 'FALSE' ? 0.6 : (draggingId === svc.id ? 0.5 : 1) }}
+            >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3 flex-1">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0"
-                    style={{ background: 'var(--brand-600)', color: 'white' }}>
-                    {svc.priority_rank}
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 cursor-move"
+                    style={{ background: 'var(--brand-600)', color: 'white' }}
+                    title="Drag to reorder">
+                    ↕
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -193,7 +245,7 @@ export default function AdminServicesClient({ services: initServices, packages: 
 
               {/* Packages expansion */}
               {isExpanded && (
-                <div className="mt-4 pt-4 animate-fade-in" style={{ borderTop: '1px solid var(--border)' }}>
+                <div className="mt-4 pt-4 animate-fade-in cursor-auto" style={{ borderTop: '1px solid var(--border)' }}>
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-semibold text-white">Packages</h4>
                     <button className="btn-secondary btn-sm" onClick={() => setAddingPkgFor(svc.id)}>
@@ -241,3 +293,4 @@ export default function AdminServicesClient({ services: initServices, packages: 
     </div>
   );
 }
+

@@ -88,6 +88,50 @@ export async function createLead(
   return lead;
 }
 
+export async function batchCreateLeads(
+  leadsData: (Omit<Lead, 'id' | 'created_at'> & Partial<Pick<Lead, 'id' | 'created_at'>>)[]
+): Promise<Lead[]> {
+  if (leadsData.length === 0) return [];
+  
+  const createdLeads: Lead[] = leadsData.map((data) => ({
+    id: data.id ?? uuidv4(),
+    business_name: data.business_name ?? '',
+    category: data.category ?? '',
+    phone: data.phone ?? '',
+    whatsapp_number: data.whatsapp_number ?? data.phone ?? '',
+    address: data.address ?? '',
+    city: data.city ?? '',
+    website: data.website ?? '',
+    google_maps_url: data.google_maps_url ?? '',
+    rating: data.rating ?? '',
+    review_count: data.review_count ?? '',
+    instagram: data.instagram ?? '',
+    facebook: data.facebook ?? '',
+    source: data.source ?? 'Import',
+    status: data.status ?? 'New',
+    tags: data.tags ?? '',
+    assigned_to: data.assigned_to ?? '',
+    priority: data.priority ?? 'medium',
+    added_by: data.added_by ?? '',
+    first_messaged_by: data.first_messaged_by ?? '',
+    last_messaged_by: data.last_messaged_by ?? '',
+    closed_by: data.closed_by ?? '',
+    deal_value: data.deal_value ?? '',
+    lost_reason: data.lost_reason ?? '',
+    created_at: data.created_at ?? new Date().toISOString(),
+    last_contacted_at: data.last_contacted_at ?? '',
+    next_followup_at: data.next_followup_at ?? '',
+    closed_at: data.closed_at ?? '',
+  } as unknown as Lead));
+
+  const rows = createdLeads.map((lead) =>
+    HEADERS[TABS.LEADS].map((h) => (lead as Record<string, string>)[h] ?? '')
+  );
+
+  await appendRows(TABS.LEADS, rows);
+  return createdLeads;
+}
+
 export async function updateLead(id: string, updates: Partial<Lead>): Promise<Lead | null> {
   const leads = await getLeads();
   const index = leads.findIndex((l) => l.id === id);
@@ -148,7 +192,17 @@ export async function getLeadsPaginated(
 
   const total = leads.length;
   const items = leads.slice((page - 1) * pageSize, page * pageSize);
-  return { items, total };
+
+  // Fetch pitch status for the visible items
+  const allPitches = await readObjects<{lead_id: string}>(TABS.PITCHES);
+  const pitchedLeadIds = new Set(allPitches.map(p => p.lead_id));
+  
+  const itemsWithPitchStatus = items.map(lead => ({
+    ...lead,
+    has_pitch: pitchedLeadIds.has(lead.id)
+  }));
+
+  return { items: itemsWithPitchStatus, total };
 }
 
 export async function claimLead(leadId: string, userId: string): Promise<Lead | null> {

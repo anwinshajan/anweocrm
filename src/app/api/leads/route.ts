@@ -20,10 +20,7 @@ export const GET = withAuth(async ({ session, req }) => {
     if (v) filters[k] = v;
   });
 
-  // Team members only see their own leads
-  if (session.role !== 'admin' && !session.permissions.can_view_all_leads) {
-    filters['assigned_to'] = session.id;
-  }
+  // All team members see all leads (admin can additionally filter by assigned_to)
 
   const result = await getLeadsPaginated(page, pageSize, filters);
   return apiSuccess(result);
