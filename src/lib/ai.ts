@@ -14,11 +14,12 @@ function getClient(): GoogleGenAI {
 }
 
 function getModel(): string {
-  return process.env.AI_MODEL ?? 'gemini-3.8-flash';
+  return process.env.AI_MODEL || 'gemini-2.5-flash';
 }
 
 async function callAI(prompt: string, useSearch = false): Promise<string> {
-  if (process.env.GROQ_API_KEY) {
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey && groqKey.trim().length > 0) {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
