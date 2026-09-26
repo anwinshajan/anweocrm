@@ -7,7 +7,7 @@ export type LeadStatus = string; // loaded from Config tab at runtime
 export type LeadTag = string;    // loaded from Config tab at runtime
 
 // Base record type for compatibility with the DAL
-export type SheetRecord = { [key: string]: string };
+export type SheetRecord = { [key: string]: any };
 // Loose version used internally for spreads
 export type LooseRecord = { [key: string]: string | undefined };
 
