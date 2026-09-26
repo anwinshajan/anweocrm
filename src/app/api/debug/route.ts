@@ -3,22 +3,34 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const envKeys = Object.keys(process.env);
-  const relevantKeys = envKeys.filter(k => 
-    k.includes('GOOG') || k.includes('GROQ') || k.includes('SESS') || k.includes('NEXT') || k.includes('VERCEL')
-  );
-
   const appsUrl = process.env.GOOGLE_APPS_SCRIPT_URL || process.env['GOOGLE_APPS_SCRIPT_URL'];
-  const sheetId = process.env.GOOGLE_SHEET_ID || process.env['GOOGLE_SHEET_ID'];
+  
+  let testResult = null;
+  let fetchError = null;
+
+  if (appsUrl && appsUrl.length > 5) {
+    try {
+      const res = await fetch(appsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'readTab', tab: 'Users' }),
+        redirect: 'follow',
+        cache: 'no-store',
+      });
+      testResult = {
+        status: res.status,
+        text: await res.text(),
+      };
+    } catch (e: any) {
+      fetchError = e.message;
+    }
+  }
 
   return NextResponse.json({
-    status: "dynamic_debug_v2",
-    timestamp: new Date().toISOString(),
-    keys_found: relevantKeys,
+    status: "dynamic_debug_v3",
     has_apps_script: !!appsUrl,
     apps_script_length: appsUrl ? appsUrl.length : 0,
-    apps_script_start: appsUrl ? appsUrl.substring(0, 15) : null,
-    has_sheet_id: !!sheetId,
-    sheet_id_length: sheetId ? sheetId.length : 0,
+    testResult,
+    fetchError,
   });
 }
