@@ -108,8 +108,6 @@ async function flushWriteQueue() {
 }
 
 function enqueueWrite(tab: string, range: string, values: string[][]): Promise<void> {
-    return Promise.resolve();
-  }
   return new Promise((resolve, reject) => {
     writeQueue.push({ tab, range, values, resolve, reject });
     flushWriteQueue();
