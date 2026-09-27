@@ -45,16 +45,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', req.url));
   }
 
-  // Force password change — but let the API call through too
-  if (
-    session.must_change_password &&
-    pathname !== '/change-password' &&
-    pathname !== '/api/auth/change-password' &&
-    pathname !== '/api/auth/logout'
-  ) {
-    return NextResponse.redirect(new URL('/change-password', req.url));
-  }
-
   return NextResponse.next();
 }
 

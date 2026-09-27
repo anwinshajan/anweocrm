@@ -33,9 +33,7 @@ export default function LoginPage() {
       }
 
       const user = data.data?.user;
-      if (user?.must_change_password) {
-        router.push('/change-password');
-      } else if (user?.role === 'admin') {
+      if (user?.role === 'admin') {
         router.push('/admin/dashboard');
       } else {
         router.push('/dashboard');
