@@ -130,6 +130,18 @@ export default function LeadDetailClient({
   }
 
   async function generate(action: string, extra?: Record<string, string>) {
+    try {
+      const statusRes = await fetch('/api/ai/status');
+      const statusData = await statusRes.json();
+      if (!statusData.online) {
+        window.alert("AI is currently offline or not connected. Please check your AI API keys.");
+        return;
+      }
+    } catch {
+      window.alert("Could not connect to AI service. Please check your connection.");
+      return;
+    }
+
     setGenerating(action);
     try {
       const res = await fetch(`/api/leads/${lead.id}/generate`, {

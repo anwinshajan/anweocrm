@@ -108,15 +108,6 @@ async function flushWriteQueue() {
 }
 
 function enqueueWrite(tab: string, range: string, values: string[][]): Promise<void> {
-  if (!process.env.GOOGLE_SHEET_ID || process.env.GOOGLE_SHEET_ID.includes('your-google-sheet-id')) {
-    const cached = getFromCache(tab) || [HEADERS[tab]];
-    if (range.includes(':')) {
-      cached.push(...values);
-    } else {
-      const rowIndex = parseInt(range.match(/\d+/)?.[0] || '2') - 1;
-      cached[rowIndex] = values[0];
-    }
-    setCache(tab, cached);
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
@@ -173,38 +164,10 @@ export async function readTab(tab: string): Promise<string[][]> {
       return data;
     } catch (e) {
       console.error(`[readTab:AppsScript] Failed to read ${tab}:`, e);
-      // Fallback to cache or mock if available
+      throw e;
     }
   }
 
-  // 2. Mock Fallback (when no credentials configured)
-  if (!process.env.GOOGLE_SHEET_ID || process.env.GOOGLE_SHEET_ID.includes('your-google-sheet-id')) {
-    const data: string[][] = [HEADERS[tab] || []];
-    if (tab === TABS.LEADS) {
-      data.push([
-        '1', 'Kerala Spice Hub', 'Restaurant', '9876543210', '9876543210', 'Kochi', 'Ernakulam', 'www.keralaspice.in', 'maps.google.com/kerala',
-        '4.5', '120', 'keralaspice', 'keralaspice', 'Google', 'Hot', 'high-value', 'admin-1', 'high', 'admin-1', 'admin-1', '', '', '', '', new Date().toISOString(), '', '', ''
-      ]);
-      data.push([
-        '2', 'Tech Solutions Cochin', 'IT', '9876543211', '9876543211', 'Kakkanad', 'Ernakulam', 'www.techsol.in', 'maps.google.com/tech',
-        '4.8', '50', 'techsol', 'techsol', 'LinkedIn', 'New', '', 'team-1', 'medium', 'admin-1', '', '', '', '', '', new Date().toISOString(), '', '', ''
-      ]);
-    } else if (tab === TABS.SERVICES) {
-      data.push(['s1', 'Local SEO', 'Dominate search', 'Local biz', 'Boost traffic', '1', 'TRUE', new Date().toISOString()]);
-      data.push(['s2', 'Social Media', 'IG Growth', 'Retail', 'Build brand', '2', 'TRUE', new Date().toISOString()]);
-    } else if (tab === TABS.USERS) {
-      data.push(['admin-1', 'admin', 'admin', 'admin', '{}', '10', '100', 'none', '0', 'TRUE', 'FALSE', '0', '', new Date().toISOString()]);
-      data.push(['team-1', 'admin1', 'admin1', 'team', '{}', '10', '100', 'none', '0', 'TRUE', 'FALSE', '0', '', new Date().toISOString()]);
-    } else if (tab === TABS.BRAND_KNOWLEDGE) {
-      data.push(['mission', 'To provide exceptional service.']);
-      data.push(['core_values', 'Integrity, Innovation, Customer Focus']);
-      data.push(['target_market', 'SMBs in tech sector']);
-    } else if (tab === TABS.CONFIG) {
-      // no extra mock rows needed for config
-    }
-    setCache(tab, data);
-    return data;
-  }
 
   // 3. Google Sheets API (Service Account)
   const res = await withRetry(() =>
@@ -286,13 +249,6 @@ export async function appendRows(tab: string, rows: string[][]): Promise<void> {
     return;
   }
 
-  // 2. Mock Fallback
-  if (!process.env.GOOGLE_SHEET_ID || process.env.GOOGLE_SHEET_ID.includes('your-google-sheet-id')) {
-    const cached = getFromCache(tab) || [HEADERS[tab]];
-    cached.push(...rows);
-    setCache(tab, cached);
-    return;
-  }
 
   // 3. Service Account API
   await withRetry(() =>

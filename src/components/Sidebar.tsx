@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AnnouncementPopup from './AnnouncementPopup';
 import Image from 'next/image';
 
@@ -51,6 +51,14 @@ export default function Sidebar({ role, username }: SidebarProps) {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const navItems = role === 'admin' ? ADMIN_NAV : TEAM_NAV;
+  const [aiOnline, setAiOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch('/api/ai/status')
+      .then(r => r.json())
+      .then(d => setAiOnline(d.online))
+      .catch(() => setAiOnline(false));
+  }, []);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -100,6 +108,14 @@ export default function Sidebar({ role, username }: SidebarProps) {
             );
           })}
         </nav>
+
+        {/* AI Status */}
+        <div className="px-4 py-2 mt-auto">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/20 text-xs text-white border border-white/5">
+            <span className={`w-2 h-2 rounded-full ${aiOnline === true ? 'bg-green-500' : aiOnline === false ? 'bg-red-500' : 'bg-gray-500'}`}></span>
+            AI Status: {aiOnline === true ? 'Online' : aiOnline === false ? 'Offline' : 'Checking...'}
+          </div>
+        </div>
 
         {/* User + Logout */}
         <div className="p-4 shrink-0 border-t border-[var(--border)] bg-black/10">

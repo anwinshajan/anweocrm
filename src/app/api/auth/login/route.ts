@@ -14,22 +14,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Username and password required' }, { status: 400 });
     }
 
-    // Local dev bypass
-    if (password === 'admin' || password === 'admin1') {
-      let role = 'team';
-      if (username.toLowerCase() === 'admin') role = 'admin';
-      
-      const sessionUser: SessionUser = {
-        id: role === 'admin' ? 'admin-1' : 'team-1',
-        username: username,
-        role: role as 'admin' | 'team',
-        permissions: {},
-        must_change_password: false,
-      };
-      
-      await createSession(sessionUser);
-      return NextResponse.json({ success: true, data: { user: sessionUser } });
-    }
 
     const user = await getUserByUsername(username);
 

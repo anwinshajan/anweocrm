@@ -257,14 +257,17 @@ What they're missing: ${research.gaps_found}
 LANGUAGE: ${language}
 
 RULES:
-- Under 90 words
-- Open with something SPECIFIC and TRUE about this business (not generic)
-- Name ONE specific problem they have, ONE specific outcome we deliver
-- Use at least one element of: specificity, social proof, reciprocity (free audit/mock-up), or low-friction CTA
-- End with a soft CTA (not "buy now")
-- NO false claims, NO made-up stats
-- Sound natural, human, WhatsApp-friendly
-- Never sound like a template
+- Keep it under 100 words.
+- Make it highly attractive, engaging, and interesting to read!
+- Use relevant emojis to make the message pop and feel friendly 🚀👋
+- Explicitly introduce yourself on behalf of "Anweo" (e.g., "Hi! I'm from Anweo...")
+- Open with something SPECIFIC and TRUE about this business (not generic).
+- Name ONE specific problem they have, and ONE specific outcome we deliver.
+- Use at least one element of: specificity, social proof, reciprocity (free audit/mock-up), or low-friction CTA.
+- End with a soft, low-pressure CTA (not "buy now").
+- NO false claims, NO made-up stats.
+- Sound natural, human, and perfectly suited for WhatsApp.
+- Never sound like a robotic template.
 
 Write ONLY the message. No explanation. No subject line. Just the WhatsApp message text.`;
 
