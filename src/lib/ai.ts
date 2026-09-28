@@ -18,23 +18,24 @@ function getModel(): string {
 }
 
 async function callAI(prompt: string, useSearch = false): Promise<string> {
-  const groqKey = process.env.GROQ_API_KEY;
-  if (groqKey && groqKey.trim().length > 0) {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const openAiKey = process.env.OPENAI_API_KEY;
+  if (openAiKey && openAiKey.trim().length > 0) {
+    const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+        'Authorization': `Bearer ${openAiKey}`
       },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-120b',
+        model: process.env.AI_MODEL || 'gemini-2.5-flash',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.2
       })
     });
     if (!res.ok) {
       const errorText = await res.text();
-      throw new Error(`Groq API Error: ${res.status} ${errorText}`);
+      throw new Error(`OpenAI API Error: ${res.status} ${errorText}`);
     }
     const data = await res.json();
     return data.choices[0].message.content || '';
