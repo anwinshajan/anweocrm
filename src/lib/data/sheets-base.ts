@@ -54,12 +54,21 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 4): Promise<T> {
     try {
       return await fn();
     } catch (err: unknown) {
-      const e = err as { code?: number; status?: number; message?: string };
-      const isRateLimit =
+      const e = err as { code?: number; status?: number; message?: string; name?: string };
+      const msg = (e?.message || '').toLowerCase();
+      const isTransient =
         e?.code === 429 || e?.status === 429 ||
-        (e?.message ?? '').includes('Quota exceeded') ||
-        (e?.message ?? '').includes('RESOURCE_EXHAUSTED');
-      if (!isRateLimit || i === retries) {
+        msg.includes('quota') ||
+        msg.includes('resource_exhausted') ||
+        msg.includes('unexpected token') || // JSON parse error from Google's HTML 302 page
+        msg.includes('unexpected end of json') ||
+        msg.includes('apps script responded with status') || // 500 or 502
+        msg.includes('fetch failed') ||
+        msg.includes('network error') ||
+        msg.includes('timeout') ||
+        e?.name === 'SyntaxError';
+
+      if (!isTransient || i === retries) {
         lastError = err;
         break;
       }
