@@ -119,6 +119,7 @@ export default function LeadDetailClient({
   const [statusEdit, setStatusEdit] = useState(lead.status);
   const [lostReason, setLostReason] = useState(lead.lost_reason);
   const [nextFollowup, setNextFollowup] = useState(lead.next_followup_at?.slice(0, 16) || '');
+  const [assignedTo, setAssignedTo] = useState(lead.assigned_to || '');
   const [notesEdit, setNotesEdit] = useState(lead.notes || '');
   const [saving, setSaving] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
@@ -209,6 +210,7 @@ export default function LeadDetailClient({
     const updates: Record<string, string> = { status: statusEdit };
     if (statusEdit === 'Lost') updates.lost_reason = lostReason;
     if (nextFollowup) updates.next_followup_at = new Date(nextFollowup).toISOString();
+    if (session.role === 'admin' && assignedTo !== undefined) updates.assigned_to = assignedTo;
 
     const res = await fetch(`/api/leads/${lead.id}`, {
       method: 'PATCH',
@@ -389,6 +391,21 @@ export default function LeadDetailClient({
           <label className="label">Next Follow-up</label>
           <input type="datetime-local" className="input text-sm" value={nextFollowup} onChange={(e) => setNextFollowup(e.target.value)} />
         </div>
+        {session.role === 'admin' && users.length > 0 && (
+          <div className="form-group">
+            <label className="label">👤 Assign To</label>
+            <select
+              className="select text-sm"
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+            >
+              <option value="">— Unassigned —</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.username} ({u.role})</option>
+              ))}
+            </select>
+          </div>
+        )}
         <button className="btn-primary btn-sm mt-4" onClick={saveStatus} disabled={saving}>
           {saving ? '⏳' : '💾'} Save
         </button>

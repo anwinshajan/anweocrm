@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Suspense } from 'react';
+import GlobalProgress from '@/components/GlobalProgress';
 
 export const metadata: Metadata = {
   title: 'Anweo CRM — Digital Marketing Agency',
@@ -14,7 +16,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <Suspense fallback={null}>
+          <GlobalProgress />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }
