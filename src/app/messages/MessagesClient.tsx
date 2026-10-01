@@ -167,7 +167,7 @@ export default function MessagesClient({ session, users, leads, messages: initMe
   }
 
   return (
-    <div className="p-6 md:p-10 flex flex-col h-[calc(100vh-2rem)] animate-fade-in max-w-7xl mx-auto w-full">
+    <div className={`p-6 md:p-8 flex flex-col flex-1 min-h-0 animate-fade-in mx-auto w-full transition-all duration-300 ${activeTab === 'anweo_ai' ? 'max-w-[1800px]' : 'max-w-7xl'}`}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 shrink-0">
         <div>
@@ -231,7 +231,7 @@ export default function MessagesClient({ session, users, leads, messages: initMe
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-10">
+      <div className={`flex-1 min-h-0 ${activeTab === 'anweo_ai' ? 'flex flex-col' : 'overflow-y-auto pr-2 pb-10'}`}>
 
         {/* ── AI Pitches Drafts ── */}
         {activeTab === 'drafts' && (
@@ -352,7 +352,7 @@ export default function MessagesClient({ session, users, leads, messages: initMe
 
             {/* Chat panel */}
             {aiSubTab === 'chat' && (
-              <div className="flex flex-col flex-1 min-h-0 card bg-[var(--surface-2)] border border-purple-500/20 p-0 overflow-hidden" style={{ minHeight: '500px' }}>
+              <div className="flex flex-col flex-1 min-h-0 card bg-[var(--surface-2)] border border-purple-500/20 p-0 overflow-hidden">
                 {/* Chat header */}
                 <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] bg-gradient-to-r from-purple-900/30 to-pink-900/20">
                   <div className="flex items-center gap-3">
@@ -448,8 +448,8 @@ export default function MessagesClient({ session, users, leads, messages: initMe
 
             {/* Teach panel */}
             {aiSubTab === 'teach' && (
-              <div className="flex flex-col gap-4">
-                <div className="card bg-[var(--surface-2)] border border-blue-500/20 p-5">
+              <div className="flex flex-col gap-4 flex-1 min-h-0">
+                <div className="card bg-[var(--surface-2)] border border-blue-500/20 p-5 flex flex-col flex-1 min-h-0">
                   <div className="flex items-start gap-3 mb-4">
                     <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
                       <Brain className="w-5 h-5 text-blue-400" />
@@ -462,19 +462,18 @@ export default function MessagesClient({ session, users, leads, messages: initMe
                     </div>
                   </div>
 
-                  <div className="rounded-xl overflow-hidden border border-[var(--border)] mb-4">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-3)] border-b border-[var(--border)]">
+                  <div className="rounded-xl flex flex-col flex-1 min-h-0 overflow-hidden border border-[var(--border)] mb-4">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-3)] border-b border-[var(--border)] shrink-0">
                       <BookOpen className="w-3.5 h-3.5 text-blue-400" />
                       <span className="text-xs font-semibold text-[var(--text-secondary)]">Knowledge Base</span>
                     </div>
                     {knowledgeLoading ? (
-                      <div className="flex items-center justify-center h-48 bg-[var(--surface-3)]">
+                      <div className="flex items-center justify-center flex-1 bg-[var(--surface-3)]">
                         <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
                       </div>
                     ) : (
                       <textarea
-                        className="w-full bg-[var(--surface-3)] text-sm text-white/90 px-4 py-3 resize-none focus:outline-none placeholder-[var(--text-muted)] font-mono leading-relaxed"
-                        rows={18}
+                        className="w-full flex-1 min-h-0 bg-[var(--surface-3)] text-sm text-white/90 px-4 py-3 resize-none focus:outline-none placeholder-[var(--text-muted)] font-mono leading-relaxed"
                         placeholder={`Tell Anweo AI everything about your agency. For example:\n\n## About Anweo\nAnweo is a digital marketing agency based in Kerala, India, specializing in...\n\n## Our Services\n1. Social Media Management - ₹8,000/month...\n2. Google Ads - starting from ₹5,000...\n\n## Our Tone\nWe communicate in a friendly, professional manner...\n\n## Target Clients\nWe focus on local businesses in Kerala, especially restaurants, retail shops...`}
                         value={aiKnowledge}
                         onChange={e => setAiKnowledge(e.target.value)}
