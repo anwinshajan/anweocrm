@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth, apiSuccess, apiError } from '@/lib/api-helpers';
+import { getSettings } from '@/lib/data';
 
 // POST /api/ai/chat
 // body: { messages: [{role, content}][], systemKnowledge?: string }
@@ -14,13 +15,14 @@ export const POST = withAuth(async ({ session, req }) => {
     return apiError('messages array is required');
   }
 
-  const openAiKey = process.env.OPENAI_API_KEY;
+  const settings = await getSettings();
+  const openAiKey = settings['OPENAI_API_KEY'] || process.env.OPENAI_API_KEY;
   if (!openAiKey || openAiKey.trim().length === 0) {
     return apiError('AI is not configured. Please check OPENAI_API_KEY in settings.');
   }
 
-  const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-  const model = process.env.AI_MODEL || 'gpt-4o-mini';
+  const baseUrl = settings['OPENAI_BASE_URL'] || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+  const model = settings['AI_MODEL'] || process.env.AI_MODEL || 'gpt-4o-mini';
 
   const systemPrompt = `You are Anweo AI, an intelligent assistant built into the Anweo CRM. You help the Anweo marketing agency team with:
 - Learning about Anweo's services, clients, and strategies

@@ -13,14 +13,17 @@ function getClient(): GoogleGenAI {
   return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 }
 
-function getModel(): string {
-  return process.env.AI_MODEL || 'gemini-2.5-flash';
+async function getModel(settings: Record<string, string>): Promise<string> {
+  return settings['AI_MODEL'] || process.env.AI_MODEL || 'gemini-2.5-flash';
 }
 
 async function callAI(prompt: string, useSearch = false): Promise<string> {
-  const openAiKey = process.env.OPENAI_API_KEY;
+  const settings = await getSettings();
+  const openAiKey = settings['OPENAI_API_KEY'] || process.env.OPENAI_API_KEY;
+  
   if (openAiKey && openAiKey.trim().length > 0) {
-    const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    const baseUrl = settings['OPENAI_BASE_URL'] || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    const model = await getModel(settings);
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -28,7 +31,7 @@ async function callAI(prompt: string, useSearch = false): Promise<string> {
         'Authorization': `Bearer ${openAiKey}`
       },
       body: JSON.stringify({
-        model: process.env.AI_MODEL || 'gemini-2.5-flash',
+        model: model,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.2
       })
@@ -42,8 +45,9 @@ async function callAI(prompt: string, useSearch = false): Promise<string> {
   }
 
   const client = getClient();
+  const model = await getModel(settings);
   const response = await client.models.generateContent({
-    model: getModel(),
+    model: model,
     contents: prompt,
     config: useSearch ? { tools: [{ googleSearch: {} }] } : undefined
   });

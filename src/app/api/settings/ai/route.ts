@@ -1,27 +1,29 @@
 import { withAuth, apiSuccess, apiError } from '@/lib/api-helpers';
-import fs from 'fs';
-import path from 'path';
+import { getSettings, setSetting } from '@/lib/data';
 
-// GET /api/settings/ai — returns current AI provider settings
+// GET /api/settings/ai — returns current AI provider settings from the database
 export const GET = withAuth(async ({ session }) => {
   if (session.role !== 'admin') return apiError('Unauthorized', 403);
 
-  const hasOpenAIKey = !!(process.env.OPENAI_API_KEY?.trim());
-  const baseUrl = process.env.OPENAI_BASE_URL || '';
+  const settings = await getSettings();
+  
+  // Fallbacks to process.env if not set in DB
+  const rawApiKey = settings['OPENAI_API_KEY'] || process.env.OPENAI_API_KEY || '';
+  const baseUrl = settings['OPENAI_BASE_URL'] || process.env.OPENAI_BASE_URL || '';
   const isCompatible = baseUrl.length > 0 && baseUrl !== 'https://api.openai.com/v1';
 
   return apiSuccess({
     provider: isCompatible ? 'openai_compatible' : 'openai',
     // Mask the API key — show last 8 chars only
-    apiKey: hasOpenAIKey
-      ? '•'.repeat(Math.max(0, (process.env.OPENAI_API_KEY?.length || 0) - 8)) + (process.env.OPENAI_API_KEY?.slice(-8) || '')
+    apiKey: rawApiKey
+      ? '•'.repeat(Math.max(0, rawApiKey.length - 8)) + rawApiKey.slice(-8)
       : '',
-    model: process.env.AI_MODEL || 'agnes-2.5-flash',
-    baseUrl: process.env.OPENAI_BASE_URL || '',
+    model: settings['AI_MODEL'] || process.env.AI_MODEL || 'agnes-2.5-flash',
+    baseUrl: baseUrl,
   });
 }, true);
 
-// POST /api/settings/ai — writes AI settings to .env.local
+// POST /api/settings/ai — writes AI settings to the database
 export const POST = withAuth(async ({ session, req }) => {
   if (session.role !== 'admin') return apiError('Unauthorized', 403);
 
@@ -33,37 +35,21 @@ export const POST = withAuth(async ({ session, req }) => {
     baseUrl?: string;
   };
 
-  const envPath = path.join(process.cwd(), '.env.local');
-  let envContent = '';
-  if (fs.existsSync(envPath)) {
-    envContent = fs.readFileSync(envPath, 'utf8');
-  }
-
-  function upsertEnvVar(content: string, key: string, value: string): string {
-    const regex = new RegExp(`^#?\\s*${key}=.*$`, 'm');
-    if (content.match(regex)) {
-      return content.replace(regex, `${key}=${value}`);
-    }
-    return content + `\n${key}=${value}`;
-  }
-
   // Only update API key if a real value was sent (not masked dots)
   if (apiKey && !apiKey.startsWith('•')) {
-    envContent = upsertEnvVar(envContent, 'OPENAI_API_KEY', apiKey);
+    await setSetting('OPENAI_API_KEY', apiKey);
   }
 
   if (model) {
-    envContent = upsertEnvVar(envContent, 'AI_MODEL', model);
+    await setSetting('AI_MODEL', model);
   }
 
   if (provider === 'openai_compatible' && baseUrl) {
-    envContent = upsertEnvVar(envContent, 'OPENAI_BASE_URL', baseUrl);
+    await setSetting('OPENAI_BASE_URL', baseUrl);
   } else if (provider === 'openai') {
     // Use official OpenAI endpoint
-    envContent = upsertEnvVar(envContent, 'OPENAI_BASE_URL', 'https://api.openai.com/v1');
+    await setSetting('OPENAI_BASE_URL', 'https://api.openai.com/v1');
   }
 
-  fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
-
-  return apiSuccess({ message: 'AI settings saved. Restart the server to apply changes.' });
+  return apiSuccess({ message: 'AI settings saved. They are now live.' });
 }, true);
