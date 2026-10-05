@@ -72,6 +72,25 @@ export default function Sidebar({ role, username }: SidebarProps) {
     router.push('/login');
   }
 
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    
+    const resetTimer = () => {
+      clearTimeout(timeout);
+      // 2 hours = 7200000 ms
+      timeout = setTimeout(handleLogout, 7200000);
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeout);
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, []);
+
   function handleNavClick(href: string) {
     if (href === pathname) return;
     setNavigatingTo(href);
