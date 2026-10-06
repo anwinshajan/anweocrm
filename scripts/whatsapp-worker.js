@@ -29,10 +29,11 @@ client.on('ready', async () => {
         await client.sendMessage(ADMIN_NUMBER, '🤖 *Anweo Omni-Bot* is now ONLINE!\n\nI am handling New Leads, Follow-ups, and Auto-Replies!');
     } catch (e) {}
     
-    // Process any messages we missed while offline
-    await processUnreadChats();
-    
-    startQueueProcessor();
+    // Process any messages we missed while offline (Wait 5s for WhatsApp to finish loading DOM)
+    setTimeout(async () => {
+        await processUnreadChats();
+        startQueueProcessor();
+    }, 5000);
 });
 
 // Listener for live auto-replies
@@ -123,8 +124,8 @@ Keep normal replies under 3 sentences. No placeholders. Make it sound human.`;
                         // Notify Admin
                         await client.sendMessage(ADMIN_NUMBER, `🤖 *AI Auto-Reply Sent* to ${lead.business_name}:\n\n_They said:_ "${msg.body}"\n\n_AI replied:_ "${reply}"`);
                         
-                        // Update CRM timestamp
-                        await updateLeadStatus(lead.id, lead.status);
+                        // Update CRM status so they don't get cold follow-ups anymore!
+                        await updateLeadStatus(lead.id, 'In Conversation');
                     }
                 }
             }
@@ -224,18 +225,23 @@ async function startQueueProcessor() {
                     } catch(e) {}
                 }
 
-                await client.sendMessage(chatId, message);
-                console.log(`✅ Sent ${newStatus} to ${lead.business_name}`);
-                
                 try {
-                    await client.sendMessage(ADMIN_NUMBER, `📤 *${newStatus}* sent to *${lead.business_name}*!\n\n"${message}"`);
-                } catch(e) {}
+                    await client.sendMessage(chatId, message);
+                    console.log(`✅ Sent ${newStatus} to ${lead.business_name}`);
+                    
+                    try {
+                        await client.sendMessage(ADMIN_NUMBER, `📤 *${newStatus}* sent to *${lead.business_name}*!\n\n"${message}"`);
+                    } catch(e) {}
 
-                await updateLeadStatus(lead.id, newStatus);
-                
-                const waitTime = Math.floor(Math.random() * (90000 - 30000 + 1) + 30000);
-                console.log(`⏳ Pausing for ${Math.round(waitTime / 1000)} seconds to mimic human behavior...`);
-                await delay(waitTime);
+                    await updateLeadStatus(lead.id, newStatus);
+                    
+                    const waitTime = Math.floor(Math.random() * (90000 - 30000 + 1) + 30000);
+                    console.log(`⏳ Pausing for ${Math.round(waitTime / 1000)} seconds to mimic human behavior...`);
+                    await delay(waitTime);
+                } catch (sendErr) {
+                    console.error(`❌ Failed to send to ${lead.business_name}. Likely invalid WhatsApp number. Error:`, sendErr.message);
+                    await updateLeadStatus(lead.id, 'Invalid Number');
+                }
             }
         }
     } catch (e) {
