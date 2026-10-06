@@ -40,8 +40,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Successful login
-    await resetFailedAttempts(user.id);
-    await updateUser(user.id, { locked_until: '' });
+    if (user.failed_attempts !== '0' || user.locked_until) {
+      await resetFailedAttempts(user.id);
+    }
 
     const permissions: UserPermissions = (() => {
       try { return JSON.parse(user.permissions); } catch { return {}; }
@@ -56,13 +57,14 @@ export async function POST(req: NextRequest) {
     };
 
     await createSession(sessionUser);
-    await addLog({ user: username, action: 'LOGIN', details: 'Success' });
     
-    // Telegram Jarvis Alert for Login
-    sendTelegramMessage(`🔐 *LOGIN ALERT* \n\nUser *${user.username}* (${user.role}) just logged into the CRM.\nTime: ${new Date().toLocaleString('en-IN')}`).catch(() => {});
-
+    // Run all non-critical logging and stats in parallel so the user logs in instantly
     const today = new Date().toISOString().slice(0, 10);
-    await incrementStat(today, user.id, 'logins').catch(() => {});
+    Promise.allSettled([
+      addLog({ user: username, action: 'LOGIN', details: 'Success' }),
+      sendTelegramMessage(`🔐 *LOGIN ALERT* \n\nUser *${user.username}* (${user.role}) just logged into the CRM.\nTime: ${new Date().toLocaleString('en-IN')}`),
+      incrementStat(today, user.id, 'logins')
+    ]).catch(console.error);
 
     return NextResponse.json({ success: true, data: { user: sessionUser } });
   } catch (err) {
