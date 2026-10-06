@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from './lib/auth';
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/', '/api/telegram/webhook', '/api/cron/backup', '/api/cron/daily-report'];
 const ADMIN_ONLY_PATHS = [
   '/admin',
   '/api/admin',
