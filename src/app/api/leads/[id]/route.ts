@@ -86,6 +86,11 @@ export const PATCH = withAuth(async ({ session, req }, context?: { params?: Prom
       type: 'status_change',
       content: `Status changed to ${body.status}`,
     });
+    
+    // Telegram Jarvis Alert for EVERY status change (except those handled above)
+    if (body.status !== 'Won' && body.status !== 'Hot Lead' && body.status !== lead.status) {
+      sendTelegramMessage(`🔄 *STATUS UPDATE* \n\n*${lead.business_name}* was moved to *${body.status}* by ${session.username}.`).catch(() => {});
+    }
   }
 
   if (body.assigned_to && body.assigned_to !== lead.assigned_to) {
@@ -95,6 +100,9 @@ export const PATCH = withAuth(async ({ session, req }, context?: { params?: Prom
       type: 'reassignment',
       content: `Reassigned from ${lead.assigned_to} to ${body.assigned_to}`,
     });
+    
+    // Telegram Alert for Reassignment
+    sendTelegramMessage(`👤 *LEAD REASSIGNED* \n\n*${lead.business_name}* was reassigned to ${body.assigned_to} by ${session.username}.`).catch(() => {});
   }
 
   await addLog({ user: session.username, action: 'UPDATE_LEAD', details: id });

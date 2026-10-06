@@ -4,6 +4,7 @@ import { verifyPassword, createSession, hashPassword } from '@/lib/auth';
 import { addLog, incrementStat } from '@/lib/data';
 import { incrementFailedAttempts, resetFailedAttempts, updateUser } from '@/lib/data/users';
 import type { SessionUser, UserPermissions } from '@/lib/types';
+import { sendTelegramMessage } from '@/lib/telegram';
 
 export async function POST(req: NextRequest) {
   try {
@@ -56,6 +57,9 @@ export async function POST(req: NextRequest) {
 
     await createSession(sessionUser);
     await addLog({ user: username, action: 'LOGIN', details: 'Success' });
+    
+    // Telegram Jarvis Alert for Login
+    sendTelegramMessage(`🔐 *LOGIN ALERT* \n\nUser *${user.username}* (${user.role}) just logged into the CRM.\nTime: ${new Date().toLocaleString('en-IN')}`).catch(() => {});
 
     const today = new Date().toISOString().slice(0, 10);
     await incrementStat(today, user.id, 'logins').catch(() => {});
