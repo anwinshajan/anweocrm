@@ -42,7 +42,18 @@ client.on('message', handleIncomingMessage);
 async function processUnreadChats() {
     console.log('📬 Checking for unread messages that arrived while offline...');
     try {
-        const chats = await client.getChats();
+        let chats = [];
+        for (let i = 0; i < 3; i++) {
+            try {
+                chats = await client.getChats();
+                break; // Success!
+            } catch (err) {
+                if (i === 2) throw err;
+                console.log(`⏳ WhatsApp chats still syncing... retrying in 5 seconds (Attempt ${i+2}/3)`);
+                await new Promise(r => setTimeout(r, 5000));
+            }
+        }
+        
         const unreadChats = chats.filter(c => c.unreadCount > 0);
         
         for (const chat of unreadChats) {
@@ -56,7 +67,7 @@ async function processUnreadChats() {
             await chat.sendSeen();
         }
     } catch (e) {
-        console.error('Error processing unread chats:', e);
+        console.log('⚠️ Could not fetch offline messages (WhatsApp sync incomplete). The bot will still reply to any NEW messages that arrive live.');
     }
 }
 
@@ -75,56 +86,59 @@ async function handleIncomingMessage(msg) {
         // Find matching lead (strip everything but digits from lead numbers)
         const lead = leads.find(l => {
             const lNum = (l.whatsapp_number || l.phone || '').replace(/\D/g, '');
-            return lNum && senderNumber.includes(lNum);
+            if (!lNum || lNum.length < 10) return false;
+            return senderNumber.endsWith(lNum.slice(-10));
         });
 
-        if (lead) {
-            console.log(`📩 Received message from ${lead.business_name}: "${msg.body}"`);
-            
-            // Skip if it's already escalated
-            if (lead.status === 'Needs Admin Help') {
-                console.log('⏭️ Skipping reply, lead is currently escalated.');
-                return;
-            }
+        const businessName = lead ? lead.business_name : `Potential Client (${senderNumber})`;
+        
+        console.log(`📩 Received message from ${businessName}: "${msg.body}"`);
+        
+        // Skip if it's already escalated
+        if (lead && lead.status === 'Needs Admin Help') {
+            console.log('⏭️ Skipping reply, lead is currently escalated.');
+            return;
+        }
 
-            // Generate AI Reply
-            const prompt = `You are a sales rep for Anweo, an innovative CRM and marketing agency. You are texting with ${lead.business_name}. 
+        // Generate AI Reply
+        const prompt = `You are a sales rep for Anweo, an innovative CRM and marketing agency. You are texting with ${businessName}. 
 They just replied to your message. Their message: "${msg.body}"
 Your goal is to answer their question briefly and try to book a call/meeting or get them interested in our CRM/Lead Gen services.
 If they ask something highly specific, complex, unusual, aggressive, or if you don't know the answer, DO NOT reply normally. Instead, output EXACTLY the word: [[ESCALATE]]
 Keep normal replies under 3 sentences. No placeholders. Make it sound human.`;
-            
-            const openAiKey = process.env.OPENAI_API_KEY;
-            const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-            const model = process.env.AI_MODEL || 'gpt-4o-mini';
+        
+        const openAiKey = process.env.OPENAI_API_KEY;
+        const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+        const model = process.env.AI_MODEL || 'gpt-4o-mini';
 
-            if (openAiKey) {
-                const aiRes = await fetch(`${baseUrl}/chat/completions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: [{ role: 'user', content: prompt }],
-                        temperature: 0.7,
-                        max_tokens: 200
-                    })
-                });
+        if (openAiKey) {
+            const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [{ role: 'user', content: prompt }],
+                    temperature: 0.7,
+                    max_tokens: 200
+                })
+            });
+            
+            if (aiRes.ok) {
+                const aiData = await aiRes.json();
+                const reply = aiData.choices[0]?.message?.content?.trim();
                 
-                if (aiRes.ok) {
-                    const aiData = await aiRes.json();
-                    const reply = aiData.choices[0]?.message?.content?.trim();
+                if (reply.includes('[[ESCALATE]]')) {
+                    console.log(`🚨 AI triggered escalation for ${businessName}!`);
+                    await escalateLead(lead || { business_name: businessName }, msg.body);
+                } else if (reply) {
+                    await client.sendMessage(msg.from, reply);
+                    console.log(`✅ AI Replied to ${businessName}.`);
                     
-                    if (reply.includes('[[ESCALATE]]')) {
-                        console.log(`🚨 AI triggered escalation for ${lead.business_name}!`);
-                        await escalateLead(lead, msg.body);
-                    } else if (reply) {
-                        await client.sendMessage(msg.from, reply);
-                        console.log(`✅ AI Replied to ${lead.business_name}.`);
-                        
-                        // Notify Admin
-                        await client.sendMessage(ADMIN_NUMBER, `🤖 *AI Auto-Reply Sent* to ${lead.business_name}:\n\n_They said:_ "${msg.body}"\n\n_AI replied:_ "${reply}"`);
-                        
-                        // Update CRM status so they don't get cold follow-ups anymore!
+                    // Notify Admin
+                    await client.sendMessage(ADMIN_NUMBER, `🤖 *AI Auto-Reply Sent* to ${businessName}:\n\n_They said:_ "${msg.body}"\n\n_AI replied:_ "${reply}"`);
+                    
+                    // Update CRM status so they don't get cold follow-ups anymore!
+                    if (lead) {
                         await updateLeadStatus(lead.id, 'In Conversation');
                     }
                 }
@@ -157,7 +171,9 @@ async function escalateLead(lead, userMessage) {
     }
 
     // 3. Update CRM status
-    await updateLeadStatus(lead.id, 'Needs Admin Help');
+    if (lead.id) {
+        await updateLeadStatus(lead.id, 'Needs Admin Help');
+    }
 }
 
 async function updateLeadStatus(id, status) {
