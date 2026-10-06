@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const user = await getUserByUsername(username);
 
-    if (!user || user.active !== 'TRUE') {
+    if (!user || String(user.active).toUpperCase() !== 'TRUE') {
       return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
     }
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Successful login
-    if (user.failed_attempts !== '0' || user.locked_until) {
+    if ((user.failed_attempts && user.failed_attempts !== '0') || user.locked_until) {
       await resetFailedAttempts(user.id);
     }
 
