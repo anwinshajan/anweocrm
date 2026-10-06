@@ -52,16 +52,31 @@ export default function AiChat() {
         }, 800);
         return;
       }
-      // 4. Fallback
+      // 4. Default AI Chat Query (Reports, Questions, etc.)
       else {
-        setTimeout(() => {
-          setMessages(prev => [...prev, { role: 'ai', text: "I'm ready! Ask me to 'scrape leads', 'draft emails', or 'run whatsapp queue'." }]);
-          setIsLoading(false);
-        }, 1000);
-        return;
+        // Prepare message history for the API
+        const apiMessages = [...messages, { role: 'user', text: userMessage }].map(m => ({
+          role: m.role === 'ai' ? 'assistant' : 'user',
+          content: m.text
+        }));
+
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: apiMessages }),
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          const aiText = data.data?.reply || data.reply || data.message || "No response received.";
+          setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
+        } else {
+          setMessages(prev => [...prev, { role: 'ai', text: `Connection Error: ${data.error || 'Unknown Error'}` }]);
+        }
       }
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'ai', text: 'Error connecting to AnweoAI.' }]);
+    } catch (e: any) {
+      setMessages(prev => [...prev, { role: 'ai', text: `System Error: ${e.message}` }]);
     }
     
     setIsLoading(false);
