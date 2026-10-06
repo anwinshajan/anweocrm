@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth, apiSuccess, apiError } from '@/lib/api-helpers';
 import { getLeadById, updateLead } from '@/lib/data/leads';
 import { addActivity, addLog, incrementStat, getSettings } from '@/lib/data';
+import { sendTelegramMessage } from '@/lib/telegram';
 
 // GET /api/leads/[id]
 export const GET = withAuth(async ({ session, req }, context?: { params?: Promise<{ id: string }> }) => {
@@ -48,6 +49,14 @@ export const PATCH = withAuth(async ({ session, req }, context?: { params?: Prom
   if (body.status === 'Won' && !lead.closed_by) {
     updates.closed_by = session.id;
     updates.closed_at = new Date().toISOString();
+    
+    // Telegram Jarvis Alert for Deal Won!
+    await sendTelegramMessage(`🏆 *DEAL WON!* \n\n*${lead.business_name}* has just been closed by ${session.username}.\nValue: ${lead.deal_value || 'N/A'}`);
+  }
+
+  if (body.status === 'Hot Lead' && lead.status !== 'Hot Lead') {
+    // Telegram Jarvis Alert for Hot Lead!
+    await sendTelegramMessage(`🔥 *HOT LEAD ALERT!* \n\n*${lead.business_name}* was just marked as a Hot Lead by ${session.username}.\nPriority: ${lead.priority}`);
   }
 
   if (body.status === 'Message Sent' && !lead.first_messaged_by) {

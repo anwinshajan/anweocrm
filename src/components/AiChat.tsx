@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function AiChat() {
   const [input, setInput] = useState('');
@@ -83,20 +85,53 @@ export default function AiChat() {
   };
 
   return (
-    <div className="w-full flex flex-col gap-4">
+    <div className="w-full flex flex-col gap-4 transition-all duration-500">
       {/* Message History */}
       {messages.length > 0 && (
-        <div className="w-full bg-[#1A1A1E] border border-white/10 rounded-3xl p-6 max-h-[400px] overflow-y-auto flex flex-col gap-4">
+        <div className="w-full bg-[#1A1A1E] border border-white/10 rounded-3xl p-6 h-[65vh] max-h-[800px] overflow-y-auto flex flex-col gap-6 shadow-2xl">
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`px-4 py-3 rounded-2xl max-w-[80%] whitespace-pre-wrap ${msg.role === 'user' ? 'bg-[var(--brand-500)] text-black font-medium' : 'bg-white/5 text-white/90'}`}>
-                {msg.text}
+              <div className={`px-5 py-4 rounded-2xl max-w-[85%] overflow-x-auto ${msg.role === 'user' ? 'bg-[var(--brand-500)] text-black font-medium whitespace-pre-wrap' : 'bg-white/5 text-white/90 border border-white/5 shadow-lg'}`}>
+                {msg.role === 'user' ? (
+                  msg.text
+                ) : (
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({node, ...props}) => <table className="w-full text-sm text-left border-collapse my-4" {...props} />,
+                      thead: ({node, ...props}) => <thead className="bg-white/10 text-white font-semibold uppercase text-xs tracking-wider" {...props} />,
+                      th: ({node, ...props}) => <th className="px-4 py-3 border border-white/10" {...props} />,
+                      td: ({node, ...props}) => <td className="px-4 py-3 border border-white/5 bg-white/5" {...props} />,
+                      h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-4 text-white" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-5 mb-3 text-white" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-lg font-semibold mt-4 mb-2 text-emerald-400" {...props} />,
+                      p: ({node, ...props}) => <p className="mb-3 last:mb-0 leading-relaxed" {...props} />,
+                      strong: ({node, ...props}) => <strong className="font-bold text-[var(--brand-400)]" {...props} />,
+                      ul: ({node, ...props}) => <ul className="list-disc list-outside ml-5 mb-4 space-y-1" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal list-outside ml-5 mb-4 space-y-1" {...props} />,
+                      li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                      hr: ({node, ...props}) => <hr className="my-5 border-white/10" {...props} />,
+                      code: ({node, className, children, ...props}) => {
+                        const match = /language-(\w+)/.exec(className || '');
+                        return !match ? (
+                          <code className="bg-black/30 text-[var(--brand-400)] px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>
+                        ) : (
+                          <pre className="bg-black/50 p-4 rounded-xl overflow-x-auto border border-white/10 my-4 text-sm font-mono text-emerald-300 shadow-inner">
+                            <code className={className} {...props}>{children}</code>
+                          </pre>
+                        )
+                      }
+                    }}
+                  >
+                    {msg.text}
+                  </ReactMarkdown>
+                )}
               </div>
             </div>
           ))}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="px-4 py-3 rounded-2xl bg-white/5 text-white/60 animate-pulse">
+              <div className="px-5 py-4 rounded-2xl bg-white/5 text-white/60 animate-pulse border border-white/5">
                 AnweoAI is thinking...
               </div>
             </div>
@@ -105,7 +140,7 @@ export default function AiChat() {
       )}
 
       {/* Chat Input Box */}
-      <div className="w-full relative group">
+      <div className="w-full relative group mt-2">
         <div className="absolute -inset-0.5 bg-gradient-to-r from-[var(--brand-500)] to-emerald-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
         <div className="relative bg-[#1A1A1E] border border-white/10 rounded-3xl p-4 flex flex-col gap-3 shadow-2xl">
           <textarea 
@@ -140,18 +175,20 @@ export default function AiChat() {
         </div>
       </div>
 
-      {/* Quick Prompts */}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-        <button onClick={() => setInput('Scrape web design agencies in Dubai')} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors">
-          🔍 Scrape agencies in Dubai
-        </button>
-        <button onClick={() => setInput('Draft cold emails for all new leads')} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors">
-          📩 Draft cold emails
-        </button>
-        <button onClick={() => setInput('Send WhatsApp messages to my pending list')} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors">
-          💬 Run WhatsApp Queue
-        </button>
-      </div>
+      {/* Quick Prompts - Hide when conversation starts */}
+      {messages.length === 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 animate-fade-in">
+          <button onClick={() => setInput('Scrape web design agencies in Dubai')} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+            🔍 Scrape agencies in Dubai
+          </button>
+          <button onClick={() => setInput('Draft cold emails for all new leads')} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+            📩 Draft cold emails
+          </button>
+          <button onClick={() => setInput('Send WhatsApp messages to my pending list')} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+            💬 Run WhatsApp Queue
+          </button>
+        </div>
+      )}
     </div>
   );
 }
