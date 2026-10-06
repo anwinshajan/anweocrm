@@ -9,7 +9,9 @@ import { sendTelegramMessage } from '@/lib/telegram';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { username, password } = body;
+    const { username: rawUser, password: rawPass } = body;
+    const username = (rawUser || '').trim();
+    const password = (rawPass || '').trim();
 
     if (!username || !password) {
       return NextResponse.json({ success: false, error: 'Username and password required' }, { status: 400 });
