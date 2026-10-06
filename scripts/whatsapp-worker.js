@@ -28,13 +28,40 @@ client.on('ready', async () => {
     try {
         await client.sendMessage(ADMIN_NUMBER, '🤖 *Anweo Omni-Bot* is now ONLINE!\n\nI am handling New Leads, Follow-ups, and Auto-Replies!');
     } catch (e) {}
+    
+    // Process any messages we missed while offline
+    await processUnreadChats();
+    
     startQueueProcessor();
 });
 
-// Listener for auto-replies
-client.on('message', async (msg) => {
+// Listener for live auto-replies
+client.on('message', handleIncomingMessage);
+
+async function processUnreadChats() {
+    console.log('📬 Checking for unread messages that arrived while offline...');
+    try {
+        const chats = await client.getChats();
+        const unreadChats = chats.filter(c => c.unreadCount > 0);
+        
+        for (const chat of unreadChats) {
+            const messages = await chat.fetchMessages({ limit: chat.unreadCount });
+            for (const msg of messages) {
+                if (!msg.fromMe) {
+                    await handleIncomingMessage(msg);
+                }
+            }
+            // Mark chat as read
+            await chat.sendSeen();
+        }
+    } catch (e) {
+        console.error('Error processing unread chats:', e);
+    }
+}
+
+async function handleIncomingMessage(msg) {
     // Ignore group messages, status updates, or messages from self
-    if (msg.isGroup || msg.from === 'status@broadcast') return;
+    if (msg.isGroup || msg.from === 'status@broadcast' || msg.fromMe) return;
     
     try {
         // Fetch ALL active leads to find who this is
@@ -105,7 +132,7 @@ Keep normal replies under 3 sentences. No placeholders. Make it sound human.`;
     } catch (err) {
         console.error('Error handling message:', err.message);
     }
-});
+}
 
 async function escalateLead(lead, userMessage) {
     // 1. Notify Admin via WhatsApp
