@@ -24,7 +24,10 @@ export async function GET(req: NextRequest) {
   let leads = await getLeads();
   
   if (status) {
-    leads = leads.filter(l => l.status === status);
+    const statuses = status.split(',').map(s => s.trim());
+    leads = leads.filter(l => statuses.includes(l.status));
+  } else {
+    leads = leads.filter(l => !['Deleted', 'Won', 'Lost'].includes(l.status));
   }
 
   return NextResponse.json({ success: true, data: leads });

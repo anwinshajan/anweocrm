@@ -33,6 +33,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: '/admin/packages', label: 'Packages', icon: '📦' },
   { href: '/admin/payments', label: 'Payments', icon: '💰' },
   { href: '/admin/config', label: 'Config', icon: '⚙️' },
+  { href: '/admin/whatsapp', label: 'WhatsApp AI', icon: '🤖' },
   { href: '/admin/brand', label: 'Brand KB', icon: '🏢' },
   { href: '/admin/templates', label: 'Templates', icon: '📄' },
   { href: '/messages', label: 'Messages', icon: '💬' },
