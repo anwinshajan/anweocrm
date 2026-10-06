@@ -18,7 +18,6 @@ export async function sendTelegramMessage(message: string): Promise<boolean> {
       body: JSON.stringify({
         chat_id: chatId,
         text: message,
-        parse_mode: 'Markdown', // Allows bolding, italics, etc.
       }),
     });
 
