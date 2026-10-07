@@ -3,6 +3,8 @@ import { sendTelegramMessage } from '@/lib/telegram';
 import { getLeads, createLead, updateLead } from '@/lib/data/leads';
 import { getDeals, getActiveUsers, getSettings, addActivity } from '@/lib/data';
 
+import { runLeadScraper } from '@/lib/scraper';
+
 // POST /api/telegram/webhook
 // This receives messages from Telegram
 export async function POST(req: NextRequest) {
@@ -25,7 +27,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    const userPrompt = message.text;
+    const userPrompt = message.text.trim();
+
+    // Check for explicit Telegram /scrape command e.g. "/scrape Dentists in Kochi" or "/scrape Real Estate Dubai 5"
+    if (userPrompt.toLowerCase().startsWith('/scrape')) {
+      const commandBody = userPrompt.slice(7).trim();
+      if (!commandBody) {
+        await sendTelegramMessage("🔎 *Anweo Lead Scraper Usage:*\n\n`/scrape <niche/business> in <city> [limit]`\n\nExample:\n`/scrape Dentists in Kochi`\n`/scrape Digital Marketing Agencies Dubai 10`");
+        return NextResponse.json({ success: true });
+      }
+
+      await sendTelegramMessage(`⏳ *Scraping leads for:* _${commandBody}_\n\nPlease wait a few seconds while I search live listings...`);
+      
+      // Parse limit if trailing number provided
+      const matchLimit = commandBody.match(/\b(\d+)\b$/);
+      const limit = matchLimit ? parseInt(matchLimit[1], 10) : 5;
+      const cleanQuery = commandBody.replace(/\b\d+\b$/, '').trim();
+
+      const scrapeRes = await runLeadScraper({
+        query: cleanQuery,
+        limit,
+        source: 'Telegram Bot Scraper',
+        added_by: 'TELEGRAM_ADMIN'
+      });
+
+      if (scrapeRes.createdCount > 0) {
+        const leadList = scrapeRes.leads.map((l, i) => `${i+1}. *${l.business_name}* (${l.city})\n   📞 ${l.phone || 'N/A'} | 🏷️ ${l.category}`).join('\n\n');
+        await sendTelegramMessage(`✅ *Scrape Complete!*\n\nAdded *${scrapeRes.createdCount}* new lead(s) to CRM:\n\n${leadList}`);
+      } else {
+        await sendTelegramMessage(`ℹ️ ${scrapeRes.message}`);
+      }
+      return NextResponse.json({ success: true });
+    }
     
     // 1. Fetch Admin CRM Context
     const [leads, deals, users] = await Promise.all([getLeads(), getDeals(), getActiveUsers()]);
@@ -49,7 +82,7 @@ ${dynamicContext}
 Guidelines:
 1. Be professional, highly detailed, and helpful. 
 2. Format for Telegram (use basic markdown like *bold* or _italic_). DO NOT use Markdown tables.
-3. You have access to tools to search, add, and update leads, check deals, and log activities. Use them to help the admin manage the CRM directly from Telegram. If adding a lead from a messy message, extract the details carefully.`;
+3. You have access to tools to search, add, scrape, and update leads, check deals, and log activities. Use them to help the admin manage the CRM directly from Telegram. If the user asks to find or scrape leads for a niche/city, call scrape_leads!`;
 
     const settings = await getSettings();
     const openAiKey = settings['OPENAI_API_KEY'] || process.env.OPENAI_API_KEY;
@@ -135,6 +168,22 @@ Guidelines:
             type: "object",
             properties: {},
             required: []
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "scrape_leads",
+          description: "Scrape real business leads live from the web for a specific niche, business category, or city.",
+          parameters: {
+            type: "object",
+            properties: {
+              query: { type: "string", description: "Search query or business type e.g. Dentists, Real Estate, Marketing Agencies" },
+              location: { type: "string", description: "City or region e.g. Dubai, Kochi, Mumbai" },
+              limit: { type: "number", description: "Number of leads to scrape (default 5, max 10)" }
+            },
+            required: ["query"]
           }
         }
       }
@@ -251,6 +300,20 @@ Guidelines:
               } else {
                 functionResult = 'No active deals found right now.';
               }
+            } else if (functionName === 'scrape_leads') {
+              const scrapeRes = await runLeadScraper({
+                query: args.query,
+                location: args.location || '',
+                limit: args.limit || 5,
+                source: 'Telegram AI Assistant',
+                added_by: 'TELEGRAM_BOT'
+              });
+              functionResult = JSON.stringify({
+                success: true,
+                message: scrapeRes.message,
+                createdCount: scrapeRes.createdCount,
+                leads: scrapeRes.leads.map(l => ({ name: l.business_name, phone: l.phone, city: l.city, category: l.category }))
+              });
             } else {
               functionResult = `Unknown function ${functionName}`;
             }

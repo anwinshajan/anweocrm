@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import type { Lead, ConfigItem, User } from '@/lib/types';
+import LeadScraperModal from '@/components/LeadScraperModal';
 
 interface LeadsPageProps {
   initialLeads: Lead[];
@@ -51,6 +52,7 @@ export default function LeadsClient({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<'table' | 'kanban'>('table');
+  const [isScraperOpen, setIsScraperOpen] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -216,7 +218,14 @@ export default function LeadsClient({
           <h1 className="text-2xl font-bold text-white">Leads</h1>
           <p style={{ color: 'var(--text-secondary)' }}>{total} total</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={() => setIsScraperOpen(true)} 
+            className="btn-secondary btn-sm bg-gradient-to-r from-amber-500/20 to-amber-600/20 text-amber-300 border-amber-500/30 hover:border-amber-400 font-semibold"
+          >
+            🔍 Scrape Leads
+          </button>
+          <Link href="/leads/scrape" className="btn-secondary btn-sm">🌐 Scraper Hub</Link>
           <Link href="/leads/new" className="btn-primary btn-sm">➕ Add Lead</Link>
           <Link href="/leads/import" className="btn-secondary btn-sm">📥 Import</Link>
         </div>
@@ -456,6 +465,13 @@ export default function LeadsClient({
           </div>
         </div>
       )}
+
+      {/* Lead Scraper Modal */}
+      <LeadScraperModal
+        isOpen={isScraperOpen}
+        onClose={() => setIsScraperOpen(false)}
+        onSuccess={() => fetchLeads(page, search, statusFilter, tagFilter)}
+      />
     </div>
   );
 }

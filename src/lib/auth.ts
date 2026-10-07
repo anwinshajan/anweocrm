@@ -58,8 +58,9 @@ export async function verifyPassword(
   password: string,
   hash: string
 ): Promise<boolean> {
-  // Fallback for the default admin user who was created with bcrypt
-  if (hash.startsWith('$2b$')) {
+  if (!hash) return false;
+  // Fallback for users created with bcrypt
+  if (hash.startsWith('$2a$') || hash.startsWith('$2b$')) {
     return bcrypt.compare(password, hash);
   }
   // Compare plaintext directly

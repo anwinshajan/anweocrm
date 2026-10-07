@@ -1,69 +1,46 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { createLead } from '@/lib/data/leads';
-import * as cheerio from 'cheerio';
+import { runLeadScraper } from '@/lib/scraper';
 
 export async function POST(req: Request) {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { prompt } = await req.json();
+    const body = await req.json();
+    const { prompt, query, location, category, target_url, limit, website_filter } = body;
 
-    // Log the request for demonstration
-    console.log(`[AnweoAI Scraper] Initiating scrape for: ${prompt}`);
+    // Handle string prompt or structured params
+    let searchQuery = query || '';
+    let searchLocation = location || '';
 
-    // In a production environment, we would use Puppeteer to navigate to 
-    // directory sites like JustDial, LinkedIn, or Google Maps.
-    // Example:
-    // const browser = await puppeteer.launch({ headless: true });
-    // const page = await browser.newPage();
-    // await page.goto(`https://example.com/search?q=${encodeURIComponent(prompt)}`);
-    // ...
-
-    // For this demonstration, we are simulating a successful scrape operation
-    const fakeLeads = [
-      {
-        business_name: `AI Found: Agency (${prompt.slice(0, 15)}...)`,
-        category: 'Marketing',
-        phone: '+919876543210', // Default mock phone
-        whatsapp_number: '+919876543210',
-        city: 'Dubai', // Mock city
-        source: 'AnweoAI Scraper',
-        status: 'New',
-        assigned_to: session.id,
-      },
-      {
-        business_name: `AI Found: Corp (${prompt.slice(0, 15)}...)`,
-        category: 'Real Estate',
-        phone: '+919876543211',
-        whatsapp_number: '+919876543211',
-        city: 'Mumbai',
-        source: 'AnweoAI Scraper',
-        status: 'New',
-        assigned_to: session.id,
-      }
-    ];
-
-    let createdCount = 0;
-    for (const leadData of fakeLeads) {
-      await createLead({
-        ...leadData,
-        tags: 'AI Scraped',
-        priority: 'medium',
-        added_by: session.id,
-      });
-      createdCount++;
+    if (!searchQuery && prompt) {
+      // Simple prompt parser e.g. "Scrape web design agencies in Dubai"
+      searchQuery = prompt;
     }
+
+    const result = await runLeadScraper({
+      query: searchQuery,
+      location: searchLocation,
+      category: category || '',
+      target_url: target_url || '',
+      limit: limit || 5,
+      website_filter: website_filter || 'all',
+      source: 'AnweoAI Scraper',
+      added_by: session.id
+    });
 
     return NextResponse.json({ 
       success: true, 
-      leadsCount: createdCount, 
-      message: `I successfully scraped ${createdCount} verified businesses and added them directly to your Leads dashboard.` 
+      leadsCount: result.createdCount,
+      totalFound: result.totalFound,
+      duplicateCount: result.duplicateCount,
+      leads: result.leads,
+      message: result.message 
     });
 
   } catch (error: any) {
-    console.error('Scraping error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[Scrape API Error]:', error);
+    return NextResponse.json({ error: error.message || 'Scraping failed' }, { status: 500 });
   }
 }
